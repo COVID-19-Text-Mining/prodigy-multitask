@@ -3,7 +3,8 @@ COPY ./ /app
 
 RUN apk update
 RUN apk add libstdc++ libgcc
-RUN apk add --no-cache --virtual .build-deps make automake gcc g++ python3-dev linux-headers
+# When building wheels, add this
+# RUN apk add --no-cache --virtual .build-deps make automake gcc g++ python3-dev linux-headers
 RUN pip install cython
 RUN pip install /app/wheels/blis-0.4.1-cp36-cp36m-linux_x86_64.whl\
     /app/wheels/cymem-2.0.3-cp36-cp36m-linux_x86_64.whl\
@@ -27,7 +28,7 @@ RUN pip install /app/prodigy-1.9.9-cp36.cp37.cp38-cp36m.cp37m.cp38-linux_x86_64.
 RUN pip install -r /app/requirements.txt
 
 # Cleanup
-RUN apk del .build-deps
+# RUN apk del .build-deps
 RUN rm -rf /root/.cache/pip \
     /app/prodigy-1.9.9-cp36.cp37.cp38-cp36m.cp37m.cp38-linux_x86_64.whl \
     /app/wheels
