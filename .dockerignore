@@ -1,4 +1,5 @@
 .git
+__pycache__/
 prodigy_dir/
 temp_file_storage/
 prodigy-1.9.9-cp36.cp37.cp38-cp36m.cp37m.cp38-macosx_10_13_x86_64.whl
