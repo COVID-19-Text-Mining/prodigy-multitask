@@ -135,6 +135,7 @@ def _proxy_response(service_id, request_path):
         request_path = request_path[1:]
     url = 'http://localhost:%d/%s%s' % (s['port'], request_path, query_ending)
 
+    app.logger.info(f'Forwarding request to prodigy instance {service_id}: {request.method} {url}')
     resp = requests.request(
         method=request.method,
         url=url,

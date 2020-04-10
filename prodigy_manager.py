@@ -50,7 +50,7 @@ def start_prodigy(working_dir, arguments=None):
     new_env = os.environ.copy()
     new_env['PRODIGY_HOME'] = work_dir
     process = subprocess.Popen(
-        ['prodigy'] + re.split(r'\s+', arguments),
+        ['python', '-m', 'prodigy'] + re.split(r'\s+', arguments),
         shell=False,
         cwd=working_dir,
         env=new_env)
