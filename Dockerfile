@@ -36,8 +36,8 @@ RUN python -m spacy download en_core_web_sm
 
 # NERSC Spin specific
 # Make /var/cache/nginx/ writable by non-root users
-# Open port 8080 as non-root user
 RUN mkdir /app/prodigy_dir /app/temp_file_storage
 RUN chgrp nginx /var/cache/nginx/ /app/prodigy_dir /app/temp_file_storage
 RUN chmod g+w /var/cache/nginx/ /app/prodigy_dir /app/temp_file_storage
-COPY ./nginx.conf /etc/nginx/conf.d/nginx.conf
+# Open port 8080 as non-root user
+ENV LISTEN_PORT=8080
