@@ -1,7 +1,11 @@
 import json
 import os
 import re
+import shutil
 import signal
+import socket
+import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -14,8 +18,6 @@ from flask import (
     redirect, url_for, abort, Response, send_file)
 from psutil import NoSuchProcess
 from werkzeug.utils import secure_filename
-
-import prodigy_manager
 
 # import settings
 
@@ -37,6 +39,86 @@ if not os.path.exists(prodigy_dir):
 if not os.path.exists(temp_dir):
     os.mkdir(temp_dir)
 prodigy_services_lock = threading.Lock()
+
+
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#             Prodigy PID control
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+def get_next_available_port(start=8080):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    port = start
+    while True:
+        try:
+            s.bind(('localhost', port))
+            break
+        except OSError:
+            port += 1
+    s.close()
+
+    return port
+
+
+def start_prodigy(working_dir, arguments=None):
+    """Start a prodigy service at a new port"""
+
+    port = get_next_available_port()
+    work_dir = os.path.realpath(working_dir)
+
+    with open(os.path.join(working_dir, 'config.json')) as f:
+        service_config = json.load(f)
+        if arguments is None:
+            arguments = str(service_config['arguments'])
+
+    # Write config
+    with open(os.path.join(working_dir, 'prodigy.json'), 'w') as f:
+        json.dump({
+            "db": "sqlite",
+            "db_settings": {
+                "sqlite": {
+                    "name": "prodigy.db",
+                    "path": work_dir,
+                }
+            },
+            "port": port,
+            "host": "127.0.0.1",
+        }, f)
+
+    new_env = os.environ.copy()
+    new_env['PRODIGY_HOME'] = work_dir
+    process = subprocess.Popen(
+        ['python', '-m', 'prodigy'] + re.split(r'\s+', arguments),
+        shell=False,
+        cwd=working_dir,
+        env=new_env)
+
+    with open(os.path.join(work_dir, 'prodigy.pid'), 'w') as f:
+        f.write(f'{process.pid}')
+
+    return {
+        'pid': process.pid,
+        'process': process,
+        'port': port,
+        'work_dir': work_dir,
+    }
+
+
+def kill_pid_and_children(
+        pid,
+        sig=signal.SIGINT if sys.platform != 'win32' else signal.SIGTERM):
+    try:
+        parent = psutil.Process(pid)
+    except psutil.NoSuchProcess:
+        return
+    for process in parent.children():
+        kill_pid_and_children(process.pid)
+    parent.send_signal(sig)
+    parent.wait()
+
+
+def stop_prodigy(pid):
+    kill_pid_and_children(pid)
 
 
 def iter_prodigy_services():
@@ -81,7 +163,7 @@ def stop_all_prodigy(*_, **__):
         for prodigy_id, _, alive, pid in iter_prodigy_services():
             if alive:
                 print('Stopping prodigy PID', pid)
-                prodigy_manager.stop_prodigy(pid)
+                stop_prodigy(pid)
 
 
 # Stop all services at exit
@@ -90,6 +172,10 @@ if threading.current_thread() is threading.main_thread():
     signal.signal(signal.SIGABRT, stop_all_prodigy)
     signal.signal(signal.SIGINT, stop_all_prodigy)
 
+
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#             Main Flask app
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 @app.route('/')
 def list_services():
@@ -126,7 +212,7 @@ def start_service(service_id):
         if pid is not None:
             return redirect(url_for('list_services'))
 
-    prodigy_manager.start_prodigy(true_path)
+    start_prodigy(true_path)
 
     return redirect(url_for('list_services'), code=302)
 
@@ -141,7 +227,7 @@ def stop_service(service_id):
     if pid is None:
         return abort(404)
 
-    prodigy_manager.stop_prodigy(pid)
+    stop_prodigy(pid)
     try:
         os.waitpid(pid, 0)
     except OSError:
@@ -150,68 +236,21 @@ def stop_service(service_id):
     return redirect(url_for('list_services'), code=302)
 
 
-@app.route('/download_db/<service_id>')
-def download_service_db(service_id):
+@app.route('/remove/<service_id>')
+def remove_service(service_id):
     true_path = os.path.join(prodigy_dir, service_id)
-    return send_file(os.path.join(true_path, 'prodigy.db'), as_attachment=True)
 
-
-def _proxy_response(service_id, request_path):
-    true_path = os.path.join(prodigy_dir, service_id)
     with prodigy_services_lock:
         pid = get_prodigy_pid(true_path)
-        if pid is None:
-            return 'The page requested is not found', 404
-        with open(os.path.join(true_path, 'prodigy.json')) as f:
-            port = int(json.load(f)['port'])
+        if pid is not None:
+            stop_prodigy(pid)
 
-    query_ending = ''
-    if request.query_string:
-        query_ending = '?' + request.query_string.decode()
-    if request_path.startswith('/'):
-        request_path = request_path[1:]
-    url = 'http://localhost:%d/%s%s' % (port, request_path, query_ending)
+    if not os.path.exists(true_path):
+        return abort(404)
 
-    app.logger.info(f'Forwarding request to prodigy instance {service_id}: {request.method} {url}')
-    resp = requests.request(
-        method=request.method,
-        url=url,
-        headers={key: value for (key, value) in request.headers if key != 'Host'},
-        data=request.get_data(),
-        cookies=request.cookies,
-        allow_redirects=False)
+    shutil.rmtree(true_path)
 
-    excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
-    headers = [(name, value) for (name, value) in resp.raw.headers.items()
-               if name.lower() not in excluded_headers]
-
-    response = Response(resp.content, resp.status_code, headers)
-    return response
-
-
-@app.errorhandler(404)
-def redirect_proxy(_):
-    if 'referer' not in request.headers:
-        return 'The page requested is not found', 404
-
-    o = urlparse(request.headers.get('referer'))
-    m = re.match(r'/prodigy/([^/]+)', o.path)
-    if not m:
-        return 'The page requested is not found', 404
-    service_id = m.group(1)
-
-    path = urlparse(request.url).path
-
-    return _proxy_response(service_id, path)
-
-
-@app.route('/prodigy/<service_id>/',
-           defaults={'path': ''},
-           methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
-@app.route('/prodigy/<service_id>/<path:path>',
-           methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
-def proxy_service(service_id, path):
-    return _proxy_response(service_id, path)
+    return redirect(url_for('list_services'), code=302)
 
 
 @app.route('/new_service')
@@ -220,16 +259,6 @@ def new_service_desc():
     return render_template(
         'services/new_service.html',
         random_id=random_id)
-
-
-def cleanup_temp_dir():
-    with prodigy_services_lock:
-        for i in os.listdir(temp_dir):
-            filename = os.path.join(temp_dir, i)
-            mtime = os.stat(filename).st_mtime
-            if mtime < time.time() - 3600:
-                # Remove files older than 1 hour
-                os.unlink(filename)
 
 
 @app.route('/new_service/<random_id>', methods=['POST'])
@@ -307,3 +336,77 @@ def upload(random_id):
                          f'for file {file.filename} complete')
 
     return make_response(("Chunk upload successful", 200))
+
+
+@app.route('/download_db/<service_id>')
+def download_service_db(service_id):
+    true_path = os.path.join(prodigy_dir, service_id)
+    return send_file(os.path.join(true_path, 'prodigy.db'), as_attachment=True)
+
+
+def _proxy_response(service_id, request_path):
+    true_path = os.path.join(prodigy_dir, service_id)
+    with prodigy_services_lock:
+        pid = get_prodigy_pid(true_path)
+        if pid is None:
+            return 'The page requested is not found', 404
+        with open(os.path.join(true_path, 'prodigy.json')) as f:
+            port = int(json.load(f)['port'])
+
+    query_ending = ''
+    if request.query_string:
+        query_ending = '?' + request.query_string.decode()
+    if request_path.startswith('/'):
+        request_path = request_path[1:]
+    url = 'http://localhost:%d/%s%s' % (port, request_path, query_ending)
+
+    app.logger.info(f'Forwarding request to prodigy instance {service_id}: {request.method} {url}')
+    resp = requests.request(
+        method=request.method,
+        url=url,
+        headers={key: value for (key, value) in request.headers if key != 'Host'},
+        data=request.get_data(),
+        cookies=request.cookies,
+        allow_redirects=False)
+
+    excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+    headers = [(name, value) for (name, value) in resp.raw.headers.items()
+               if name.lower() not in excluded_headers]
+
+    response = Response(resp.content, resp.status_code, headers)
+    return response
+
+
+@app.errorhandler(404)
+def redirect_proxy(_):
+    if 'referer' not in request.headers:
+        return 'The page requested is not found', 404
+
+    o = urlparse(request.headers.get('referer'))
+    m = re.match(r'/prodigy/([^/]+)', o.path)
+    if not m:
+        return 'The page requested is not found', 404
+    service_id = m.group(1)
+
+    path = urlparse(request.url).path
+
+    return _proxy_response(service_id, path)
+
+
+@app.route('/prodigy/<service_id>/',
+           defaults={'path': ''},
+           methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+@app.route('/prodigy/<service_id>/<path:path>',
+           methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+def proxy_service(service_id, path):
+    return _proxy_response(service_id, path)
+
+
+def cleanup_temp_dir():
+    with prodigy_services_lock:
+        for i in os.listdir(temp_dir):
+            filename = os.path.join(temp_dir, i)
+            mtime = os.stat(filename).st_mtime
+            if mtime < time.time() - 3600:
+                # Remove files older than 1 hour
+                os.unlink(filename)

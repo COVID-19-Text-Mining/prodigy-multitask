@@ -48,6 +48,7 @@
                     <th scope="col">Prodigy Arguments</th>
                     <th scope="col">Start Annotation</th>
                     <th scope="col">DB Download</th>
+                    <th scope="col">Remove Prodigy</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -94,6 +95,13 @@
                                 Download DB (SQLite3) file.
                             </a>
                         </td>
+
+                        <td>
+                            <a class="btn btn-danger confirm_removal"
+                               href="{{ url_for('remove_service', service_id=service['id']) }}">
+                                Remove
+                            </a>
+                        </td>
                     </tr>
                 {% endfor %}
                 </tbody>
@@ -119,6 +127,14 @@
       "The Docker container might be destroyed and data might be removed.\n\n" +
       "If any Prodigy service page fails to open, just try again in a few secs, or restart it.\n")
   }
+
+  $('.confirm_removal').click(function (e) {
+    if (!confirm("Do you really want to remove this Prodigy instance? The database will be purged!")) {
+      e.preventDefault();
+      return false;
+    }
+  })
+
 </script>
 </body>
 </html>
