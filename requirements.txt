@@ -2,5 +2,6 @@ flask
 Flask-PyMongo
 prodigy
 psutil
+pymongo
 requests
 werkzeug

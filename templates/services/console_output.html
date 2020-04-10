@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <title>Console for Prodigy service {{ prodigy_id }}</title>
+
+    <!-- Bootstrap core CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.4.0/min/dropzone.min.css"/>
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.4.0/min/basic.min.css"/>
+
+    <style>
+        body {
+            margin-top: 50px;
+        }
+        pre{
+            border: 1px solid black;
+        }
+    </style>
+</head>
+
+<body>
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <h3>Console output for {{ prodigy_id }}</h3>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <h5>Stdout</h5>
+            <pre id="stdout">
+{{ stdout }}
+            </pre>
+        </div>
+        <div class="col-md-6">
+            <h5>Stderr</h5>
+            <pre id="stdout">
+{{ stderr }}
+            </pre>
+        </div>
+    </div>
+
+
+</div> <!-- /container -->
+
+<script src="https://code.jquery.com/jquery-3.4.1.min.js"
+        integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.bundle.min.js"
+        integrity="sha384-6khuMg9gaYr5AxOqhkVIODVIvm9ynTT5J4V1cfthmT+emCG6yVmEZsRHdxlotUnm"
+        crossorigin="anonymous"></script>
+<script>
+    setTimeout(function () {
+        location.reload();
+    }, 5000);
+</script>
+</body>
+</html>

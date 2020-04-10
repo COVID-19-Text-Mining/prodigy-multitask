@@ -3,6 +3,7 @@ temp_file_storage/
 prodigy-1.9.9-cp36.cp37.cp38-cp36m.cp37m.cp38-linux_x86_64.whl
 prodigy-1.9.9-cp36.cp37.cp38-cp36m.cp37m.cp38-macosx_10_13_x86_64.whl
 prodigy-1.9.9-cp36.cp37.cp38-cp36m.cp37m.cp38-win_amd64.whl
+settings.py
 
 .idea/
 .DS_Store

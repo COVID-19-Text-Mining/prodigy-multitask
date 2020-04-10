@@ -47,7 +47,7 @@
                     <th scope="col">Name</th>
                     <th scope="col">Prodigy Arguments</th>
                     <th scope="col">Start Annotation</th>
-                    <th scope="col">DB Download</th>
+                    <th scope="col">Console Output</th>
                     <th scope="col">Remove Prodigy</th>
                 </tr>
                 </thead>
@@ -91,8 +91,8 @@
                         {% endif %}
 
                         <td>
-                            <a href="{{ url_for('download_service_db', service_id=service['id']) }}">
-                                Download DB (SQLite3) file.
+                            <a href="{{ url_for('view_console', service_id=service['id']) }}" target="_blank">
+                                View console
                             </a>
                         </td>
 

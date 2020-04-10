@@ -66,32 +66,22 @@ def start_prodigy(working_dir, arguments=None):
     port = get_next_available_port()
     work_dir = os.path.realpath(working_dir)
 
-    with open(os.path.join(working_dir, 'config.json')) as f:
-        service_config = json.load(f)
-        if arguments is None:
-            arguments = str(service_config['arguments'])
-
     # Write config
     with open(os.path.join(working_dir, 'prodigy.json'), 'w') as f:
         json.dump({
-            "db": "sqlite",
-            "db_settings": {
-                "sqlite": {
-                    "name": "prodigy.db",
-                    "path": work_dir,
-                }
-            },
             "port": port,
             "host": "127.0.0.1",
         }, f)
 
     new_env = os.environ.copy()
     new_env['PRODIGY_HOME'] = work_dir
+    script = os.path.realpath(os.path.join(os.path.dirname(__file__), 'prodigy_entrypoint.py'))
     process = subprocess.Popen(
-        ['python', '-m', 'prodigy'] + re.split(r'\s+', arguments),
+        ['python', script, work_dir],
         shell=False,
         cwd=working_dir,
-        env=new_env)
+        env=new_env,
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     with open(os.path.join(work_dir, 'prodigy.pid'), 'w') as f:
         f.write(f'{process.pid}')
@@ -263,6 +253,32 @@ def remove_service(service_id):
     return redirect(url_for('list_services'), code=302)
 
 
+@app.route('/console/<service_id>')
+def view_console(service_id):
+    true_path = os.path.join(prodigy_dir, service_id)
+    if not os.path.exists(true_path):
+        return abort(404)
+
+    try:
+        with open(os.path.join(true_path, 'stdout.txt')) as f:
+            stdout = f.read()
+    except FileNotFoundError:
+        stdout = ""
+    except OSError:
+        stdout = "Error, this Prodigy service did not write to stdout.txt"
+    try:
+        with open(os.path.join(true_path, 'stderr.txt')) as f:
+            stderr = f.read()
+    except FileNotFoundError:
+        stderr = ""
+    except OSError:
+        stderr = "Error, this Prodigy service did not write to stdout.txt"
+
+    return render_template("services/console_output.html",
+                           prodigy_id=service_id,
+                           stdout=stdout, stderr=stderr)
+
+
 @app.route('/new_service')
 def new_service_desc():
     random_id = str(uuid.uuid1())
@@ -346,12 +362,6 @@ def upload(random_id):
                          f'for file {file.filename} complete')
 
     return make_response(("Chunk upload successful", 200))
-
-
-@app.route('/download_db/<service_id>')
-def download_service_db(service_id):
-    true_path = os.path.join(prodigy_dir, service_id)
-    return send_file(os.path.join(true_path, 'prodigy.db'), as_attachment=True)
 
 
 def _proxy_response(service_id, request_path):
