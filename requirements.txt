@@ -1,0 +1,6 @@
+flask
+Flask-PyMongo
+prodigy
+psutil
+requests
+werkzeug

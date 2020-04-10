@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <title>List of Prodigy Service</title>
+
+    <!-- Bootstrap core CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.4.0/min/dropzone.min.css"/>
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.4.0/min/basic.min.css"/>
+
+    <style>
+        body {
+            margin-top: 50px;
+        }
+    </style>
+</head>
+
+<body>
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <h3>List of Prodigy services</h3>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <p>
+                This website makes it possible to run multiple Prodigy instances on the same website.
+                So we don't need to start a Docker container for each instance.
+            </p>
+            <p>
+                Prodigy documentations
+                <a href="https://prodi.gy/docs/recipes" target="_blank" rel="noreferrer">here</a>.
+            </p>
+
+            <table class="table">
+                <thead>
+                <tr>
+                    <th scope="col">Status</th>
+                    <th scope="col">Name</th>
+                    <th scope="col">Prodigy Arguments</th>
+                    <th scope="col">Start Annotation</th>
+                    <th scope="col">DB Download</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for service in all_services %}
+                    <tr>
+                        {% if service['active'] %}
+                            <td>
+                                <span class="badge badge-primary">Active</span>
+                                <br/>
+                                <a href="{{ url_for('stop_service', service_id=service['id']) }}">Stop</a>
+                            </td>
+
+                        {% else %}
+                            <td>
+                                <span class="badge badge-danger">Inactive</span>
+                                <br/>
+                                <a href="{{ url_for('start_service', service_id=service['id']) }}">Start</a>
+                            </td>
+
+                        {% endif %}
+
+                        <td>{{ service['name'] }}</td>
+
+                        <td>
+                            <span class="badge badge-secondary">$ prodigy</span>
+                            {{ service['arguments'] }}</td>
+
+                        {% if service['active'] %}
+                            <td>
+                                <a href="{{ url_for('proxy_service', service_id=service['id'], path='') }}"
+                                   target="_blank" onclick="alert_deletion();">
+                                    Click here
+                                </a> to enter
+                            </td>
+
+                        {% else %}
+                            <td>
+                                Please start it first
+                            </td>
+                        {% endif %}
+
+                        <td>
+                            <a href="{{ url_for('download_service_db', service_id=service['id']) }}">
+                                Download DB (SQLite3) file.
+                            </a>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="col-md-12">
+            <a href="{{ url_for('new_service_desc') }}">Click here to start a new Prodigy instance.</a>
+        </div>
+    </div>
+
+
+</div> <!-- /container -->
+
+<script src="https://code.jquery.com/jquery-3.4.1.min.js"
+        integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.bundle.min.js"
+        integrity="sha384-6khuMg9gaYr5AxOqhkVIODVIvm9ynTT5J4V1cfthmT+emCG6yVmEZsRHdxlotUnm"
+        crossorigin="anonymous"></script>
+<script>
+  function alert_deletion() {
+    alert("Be sure to download database file after you are done.\n" +
+      "The Docker container might be destroyed and data might be removed.\n\n" +
+      "If any Prodigy service page fails to open, just try again in a few secs, or restart it.\n")
+  }
+</script>
+</body>
+</html>

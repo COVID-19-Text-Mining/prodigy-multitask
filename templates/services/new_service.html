@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <title>New Prodigy Service</title>
+
+    <!-- Bootstrap core CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.4.0/min/dropzone.min.css"/>
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.4.0/min/basic.min.css"/>
+
+    <style>
+        body {
+            margin-top: 50px;
+        }
+    </style>
+</head>
+
+<body>
+<div class="container">
+    <div class="row">
+        <div class="col-md-9  offset-md-1">
+            <h3>Start a new Prodigy service</h3>
+        </div>
+    </div>
+
+    <div class="row" id="row-service-info">
+        <div class="col-md-9 offset-md-1">
+            <form action='{{ url_for("create_new_service", random_id=random_id) }}' id="form-service" method="POST">
+                <div class="form-group">
+                    <label for="service-name">Service name</label>
+                    <input class="form-control" id="service-name" name="name">
+                </div>
+                <div class="form-group">
+                    <label for="service-arguments">Prodigy arguments (such as "textcat.manual news_topics input.jsonl
+                        --label Technology,Politics")</label>
+                    <label for="service-arguments">If you use any files, make sure to upload them below.</label>
+                    <input class="form-control" id="service-arguments" name="arguments">
+                </div>
+                <div class="form-group">
+                    <label for="file-uploads">Files (all files will be in the same folder as prodigy)</label>
+                    <div class="dropzone" id="myDropzone"></div>
+                </div>
+                <button type="submit" id="submit-all" class="btn btn-primary">Start</button>
+                <a href="{{ url_for('list_services') }}" class="btn btn-secondary">Go back</a>
+            </form>
+        </div>
+    </div>
+
+
+</div> <!-- /container -->
+
+<script src="https://code.jquery.com/jquery-3.4.1.min.js"
+        integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.bundle.min.js"
+        integrity="sha384-6khuMg9gaYr5AxOqhkVIODVIvm9ynTT5J4V1cfthmT+emCG6yVmEZsRHdxlotUnm"
+        crossorigin="anonymous"></script>
+<script type="application/javascript"
+        src="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.4.0/min/dropzone.min.js">
+</script>
+<script>
+  //https://stackoverflow.com/questions/17872417/integrating-dropzone-js-into-existing-html-form-with-other-fields
+  Dropzone.options.myDropzone = {
+    parallelUploads: 5,
+    paramName: 'file',
+    chunking: true,
+    forceChunking: true,
+    url: '{{ url_for("upload",random_id=random_id) }}',
+    maxFilesize: 1025, // megabytes
+    chunkSize: 10485760, // bytes
+    addRemoveLinks: true
+  };
+
+  $('#submit-all').click(function (e) {
+    let files = [];
+    $('.dz-filename').each(function () {
+      files.push($(this).find('span').text());
+    });
+
+    $('.additional-files').remove();
+    files.forEach(function (e) {
+      $('#form-service').append(
+        $('<input name="files" value="' + e + '">')
+      )
+    });
+  })
+</script>
+</body>
+</html>
