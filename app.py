@@ -173,6 +173,16 @@ if threading.current_thread() is threading.main_thread():
     signal.signal(signal.SIGINT, stop_all_prodigy)
 
 
+def cleanup_temp_dir():
+    with prodigy_services_lock:
+        for i in os.listdir(temp_dir):
+            filename = os.path.join(temp_dir, i)
+            mtime = os.stat(filename).st_mtime
+            if mtime < time.time() - 3600:
+                # Remove files older than 1 hour
+                os.unlink(filename)
+
+
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #             Main Flask app
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -400,13 +410,3 @@ def redirect_proxy(_):
            methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 def proxy_service(service_id, path):
     return _proxy_response(service_id, path)
-
-
-def cleanup_temp_dir():
-    with prodigy_services_lock:
-        for i in os.listdir(temp_dir):
-            filename = os.path.join(temp_dir, i)
-            mtime = os.stat(filename).st_mtime
-            if mtime < time.time() - 3600:
-                # Remove files older than 1 hour
-                os.unlink(filename)
