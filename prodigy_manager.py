@@ -4,6 +4,7 @@ import re
 import signal
 import socket
 import subprocess
+import sys
 
 import psutil
 
@@ -44,7 +45,8 @@ def start_prodigy(working_dir, arguments=None):
                     "path": work_dir,
                 }
             },
-            "port": port
+            "port": port,
+            "host": "127.0.0.1",
         }, f)
 
     new_env = os.environ.copy()
@@ -55,6 +57,9 @@ def start_prodigy(working_dir, arguments=None):
         cwd=working_dir,
         env=new_env)
 
+    with open(os.path.join(work_dir, 'prodigy.pid'), 'w') as f:
+        f.write(f'{process.pid}')
+
     return {
         'pid': process.pid,
         'process': process,
@@ -63,15 +68,14 @@ def start_prodigy(working_dir, arguments=None):
     }
 
 
-def kill_pid_and_children(pid, sig=signal.SIGINT):
+def kill_pid_and_children(pid, sig=signal.SIGINT if sys.platform != 'win32' else signal.SIGTERM):
     try:
         parent = psutil.Process(pid)
     except psutil.NoSuchProcess:
         return
-    children = parent.children()
-    for process in children:
+    for process in parent.children():
         kill_pid_and_children(process.pid)
-        process.send_signal(sig)
+    parent.send_signal(sig)
 
 
 def stop_prodigy(pid):

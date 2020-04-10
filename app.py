@@ -7,13 +7,16 @@ import time
 import uuid
 from urllib.parse import urlparse
 
+import psutil
 import requests
 from flask import (
     Flask, render_template, make_response, request,
     redirect, url_for, abort, Response, send_file)
+from psutil import NoSuchProcess
 from werkzeug.utils import secure_filename
 
 import prodigy_manager
+
 # import settings
 
 app = Flask(__name__)
@@ -33,15 +36,52 @@ if not os.path.exists(prodigy_dir):
     os.mkdir(prodigy_dir)
 if not os.path.exists(temp_dir):
     os.mkdir(temp_dir)
-prodigy_services = {}
 prodigy_services_lock = threading.Lock()
+
+
+def iter_prodigy_services():
+    for i in os.listdir(prodigy_dir):
+        work_dir = os.path.join(prodigy_dir, i)
+        config_fn = os.path.join(work_dir, 'config.json')
+        if not os.path.exists(config_fn):
+            continue
+
+        pid_fn = os.path.join(work_dir, 'prodigy.pid')
+
+        alive = False
+        pid = 0
+        if os.path.exists(pid_fn):
+            with open(pid_fn) as f:
+                pid = int(f.read())
+            try:
+                psutil.Process(pid)
+                alive = True
+            except NoSuchProcess:
+                os.unlink(pid_fn)
+
+        yield i, work_dir, alive, pid
+
+
+def get_prodigy_pid(work_dir):
+    pid_fn = os.path.join(work_dir, 'prodigy.pid')
+    if os.path.exists(pid_fn):
+        with open(pid_fn) as f:
+            try:
+                # Already started
+                pid = int(f.read())
+                psutil.Process(pid)
+                return pid
+            except NoSuchProcess:
+                pass
+    return None
 
 
 def stop_all_prodigy(*_, **__):
     with prodigy_services_lock:
-        for service in prodigy_services:
-            print('Stopping prodigy PID', service['pid'])
-            prodigy_manager.stop_prodigy(service['pid'])
+        for prodigy_id, _, alive, pid in iter_prodigy_services():
+            if alive:
+                print('Stopping prodigy PID', pid)
+                prodigy_manager.stop_prodigy(pid)
 
 
 # Stop all services at exit
@@ -54,26 +94,21 @@ if threading.current_thread() is threading.main_thread():
 @app.route('/')
 def list_services():
     with prodigy_services_lock:
-        active_services = set(prodigy_services.keys())
+        all_services = []
 
-    all_services = []
-    for service in os.listdir(prodigy_dir):
-        config_filename = os.path.join(prodigy_dir, service, 'config.json')
-        if not os.path.exists(config_filename):
-            app.logger.warning(f'Cannot find config file {config_filename}')
-            continue
-
-        with open(config_filename) as f:
-            service_config = json.load(f)
-            try:
-                all_services.append({
-                    'id': service,
-                    'name': str(service_config['name']),
-                    'arguments': str(service_config['arguments']),
-                    'active': service_config['work_dir'] in active_services,
-                })
-            except KeyError:
-                app.logger.warning(f'Config file {config_filename} corrupted.')
+        for prodigy_id, work_dir, alive, pid in iter_prodigy_services():
+            config_filename = os.path.join(work_dir, 'config.json')
+            with open(config_filename) as f:
+                service_config = json.load(f)
+                try:
+                    all_services.append({
+                        'id': prodigy_id,
+                        'name': str(service_config['name']),
+                        'arguments': str(service_config['arguments']),
+                        'active': alive,
+                    })
+                except KeyError:
+                    app.logger.warning(f'Config file {config_filename} corrupted.')
 
     return render_template(
         'services/list_services.html', all_services=all_services)
@@ -87,13 +122,11 @@ def start_service(service_id):
         return
 
     with prodigy_services_lock:
-        if true_path in prodigy_services:
-            # Already started
+        pid = get_prodigy_pid(true_path)
+        if pid is not None:
             return redirect(url_for('list_services'))
 
-    s = prodigy_manager.start_prodigy(true_path)
-    with prodigy_services_lock:
-        prodigy_services[true_path] = s
+    prodigy_manager.start_prodigy(true_path)
 
     return redirect(url_for('list_services'), code=302)
 
@@ -103,13 +136,16 @@ def stop_service(service_id):
     true_path = os.path.join(prodigy_dir, service_id)
 
     with prodigy_services_lock:
-        if true_path not in prodigy_services:
-            abort(404)
-            return
-        s = prodigy_services.pop(true_path)
+        pid = get_prodigy_pid(true_path)
 
-    prodigy_manager.stop_prodigy(s['pid'])
-    os.waitpid(s['pid'], 0)
+    if pid is None:
+        return abort(404)
+
+    prodigy_manager.stop_prodigy(pid)
+    try:
+        os.waitpid(pid, 0)
+    except OSError:
+        pass
 
     return redirect(url_for('list_services'), code=302)
 
@@ -123,17 +159,18 @@ def download_service_db(service_id):
 def _proxy_response(service_id, request_path):
     true_path = os.path.join(prodigy_dir, service_id)
     with prodigy_services_lock:
-        try:
-            s = prodigy_services[true_path]
-        except KeyError:
+        pid = get_prodigy_pid(true_path)
+        if pid is None:
             return 'The page requested is not found', 404
+        with open(os.path.join(true_path, 'prodigy.json')) as f:
+            port = int(json.load(f)['port'])
 
     query_ending = ''
     if request.query_string:
         query_ending = '?' + request.query_string.decode()
     if request_path.startswith('/'):
         request_path = request_path[1:]
-    url = 'http://localhost:%d/%s%s' % (s['port'], request_path, query_ending)
+    url = 'http://localhost:%d/%s%s' % (port, request_path, query_ending)
 
     app.logger.info(f'Forwarding request to prodigy instance {service_id}: {request.method} {url}')
     resp = requests.request(
