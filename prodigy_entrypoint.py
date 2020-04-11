@@ -319,76 +319,7 @@ sys.argv = ['prodigy'] + shlex.split(str(config['arguments']))
 #              Prodigy app start
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-# The following are verbatim copy from prodigy.__main__
-from collections import defaultdict
+from prodigy import __main__ as prodigy_main
 
-try:
-    # See https://stackoverflow.com/a/16865106/6400719
-    from signal import signal, SIGPIPE, SIG_DFL
-
-    signal(SIGPIPE, SIG_DFL)
-except ImportError:  # Windows
-    pass
-
-
-def sort_recipes(recipes):
-    result = defaultdict(list)
-    for recipe in recipes:
-        if "." in recipe:  # try to group recipes of the same type together
-            prefix = recipe.split(".", 1)[0]
-            result[prefix].append(recipe)
-        else:
-            result["other"].append(recipe)
-    return result.values()
-
-
-from pathlib import Path
-from prodigy.core import get_recipe, list_recipes
-from prodigy.app import server
-from prodigy.util import get_valid_sessions, msg, log, registry
-
-valid_sessions = get_valid_sessions()
-if valid_sessions is not None:
-    log(f"CLI: limiting user sessions to list: {', '.join(valid_sessions)}")
-help_args = ("--help", "-h", "help")
-if len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[1] in help_args):
-    recipes = list_recipes()
-    sorted_recipes = sort_recipes(recipes)
-    msg.divider("Available recipes", icon="emoji")
-    for options in sort_recipes(recipes):
-        print("")
-        msg.text(", ".join(options))
-    sys.exit(0)
-
-command = sys.argv.pop(1)
-sys.argv[0] = f"prodigy {command}"
-args = sys.argv[1:]
-path = None
-if "-F" in args:
-    path = args.pop(args.index("-F") + 1)
-    args.pop(args.index("-F"))
-
-# Just load the entry points here so the decorator runs and sets them
-# properlyand. Don't add them to the registry, because the functions will
-# be wrong (original recipe, not the recipe proxy). Also beware of circular
-# imports – we can't just call this in util etc., because that may be
-# imported by third-party packages.
-registry.recipes.get_entry_points()
-
-recipe = get_recipe(command, path=path)
-if recipe:
-    controller = recipe(*args, use_plac=True)
-    if hasattr(controller, "config"):  # hacky controller check :(
-        controller_config = controller.config
-        controller_config['db'] = MongoDatabase()
-        server(controller, controller_config)
-else:
-    if path is not None:
-        r_path = Path(path)
-        if not r_path.is_file():
-            msg.fail("Invalid recipe file path", r_path.resolve(), exits=1)
-        msg.fail(f"Can't import recipe '{command}'.", r_path.resolve(), exits=1)
-    opts = [r for r in list_recipes() if command in r]
-    help_text = "Run prodigy --help to see available options"
-    sim = f"Similar recipes: {', '.join(opts)}" if len(opts) else help_text
-    msg.fail(f"Can't find recipe or command '{command}'.", sim, exits=1)
+with open(os.path.splitext(prodigy_main.__file__)[0] + ".py") as fh:
+    exec(fh.read())
