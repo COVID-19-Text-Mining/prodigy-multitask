@@ -240,55 +240,42 @@ class MongoDatabase(Database):
         collection_link.insert_many(links)
 
     def unlink(self, dataset):
-        dataset = collection_dataset.find_one({'name': dataset})
-        if dataset is None:
-            return
-        collection_link.delete_many({'dataset_id': dataset['_id']})
+        # Don't allow to remove examples
+        raise NotImplementedError()
+        # dataset = collection_dataset.find_one({'name': dataset})
+        # if dataset is None:
+        #     return
+        # collection_link.delete_many({'dataset_id': dataset['_id']})
 
     def drop_dataset(self, name, batch_size=None):
-        """
-        name (unicode): The name of the dataset to drop.
-        batch_size (int): If specified examples will be deleted in batches of the given size.
-        RETURNS (bool): True if dataset was dropped.
-        """
-        dataset = collection_dataset.find_one({'name': name})
-        if dataset is None:
-            return
-        collection_example.delete_many(
-            {'_id': {
-                '$in': [x['example_id']
-                        for x in collection_link.find({'dataset_id': dataset['_id']})]}})
-        collection_link.delete_many({'dataset_id': dataset['_id']})
-        collection_dataset.delete_many({'name': name})
+        # Don't allow to remove examples
+        raise NotImplementedError()
+        # dataset = collection_dataset.find_one({'name': name})
+        # if dataset is None:
+        #     return
+        # collection_example.delete_many(
+        #     {'_id': {
+        #         '$in': [x['example_id']
+        #                 for x in collection_link.find({'dataset_id': dataset['_id']})]}})
+        # collection_link.delete_many({'dataset_id': dataset['_id']})
+        # collection_dataset.delete_many({'name': name})
 
     def drop_examples(self, ids, by="task_hash"):
-        """
-        ids (list): The IDs of the examples to drop.
-        by (unicode): ID to get examples by. Defaults to 'task_hash'.
-        """
-        try:
-            ids = list(ids)
-        except TypeError:
-            ids = [ids]
-        example_ids = [x['_id'] for x in collection_example.find({by: ids})]
-        collection_example.delete_many({'_id': {'$in': example_ids}})
-        collection_link.delete_many({'example_id': {'$in': example_ids}})
+        # Don't allow to remove examples
+        raise NotImplementedError()
+        # try:
+        #     ids = list(ids)
+        # except TypeError:
+        #     ids = [ids]
+        # example_ids = [x['_id'] for x in collection_example.find({by: ids})]
+        # collection_example.delete_many({'_id': {'$in': example_ids}})
+        # collection_link.delete_many({'example_id': {'$in': example_ids}})
 
     def save(self):
         pass
 
     def export_session(self, session_id):
-        log(f"DB: Exporting session '{session_id}'")
-        if session_id is None:
-            raise ValueError("session_id is required to export a session")
-        if session_id not in self:
-            raise ValueError("session does not exist in db")
-        examples = self.get_dataset(session_id)
-        if len(examples) == 0:
-            return None
-        result = self.add_to_exports(examples, session_id)
-        log(f"DB: Exported {len(examples)} examples to {result}")
-        return {"total": len(examples), "file": result}
+        raise NotImplementedError()
 
     def trash_session(self, session_id=None):
         raise NotImplementedError()
