@@ -1,5 +1,7 @@
 flask
 Flask-PyMongo
+Flask-Security
+Flask-MongoEngine
 prodigy
 psutil
 pymongo

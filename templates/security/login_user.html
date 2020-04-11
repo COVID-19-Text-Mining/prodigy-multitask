@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <title>Login</title>
+
+    <!-- Bootstrap core CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+
+    <style>
+        body {
+            margin-top: 50px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+    <div class="row justify-content-md-center">
+        <h4 style="margin-bottom: 20px;">Login to Prodigy services</h4>
+    </div>
+
+    <div class="row justify-content-md-center">
+        <form action="{{ url_for_security('login') }}" method="POST" name="login_user_form" class="col-md-6">
+            {{ login_user_form.hidden_tag() }}
+
+            <div style="margin-bottom: 25px" class="input-group">
+                {% if login_user_form.email.errors %}
+                    {{ login_user_form.email(class="form-control is-invalid", placeholder="Email") }}
+
+                    <div class="invalid-feedback">
+                        {% for error in login_user_form.email.errors %}
+                            <ul>
+                                <li>{{ error }}</li>
+                            </ul>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    {{ login_user_form.email(class="form-control", placeholder="Email") }}
+                {% endif %}
+            </div>
+
+
+            <div style="margin-bottom: 25px" class="input-group">
+                {% if login_user_form.password.errors %}
+                    {{ login_user_form.password(class="form-control is-invalid", placeholder="Password") }}
+
+                    <div class="invalid-feedback">
+                        {% for error in login_user_form.password.errors %}
+                            <ul>
+                                <li>{{ error }}</li>
+                            </ul>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    {{ login_user_form.password(class="form-control", placeholder="Password") }}
+                {% endif %}
+            </div>
+
+            <div class="input-group">
+                <div class="checkbox">
+                    <label>
+                        {{ login_user_form.remember() }} Remember me
+                    </label>
+                </div>
+            </div>
+
+
+            <div style="margin-top:10px" class="form-group">
+                <div class="col-sm-12 controls">
+                    <div class="row">
+                        <div class="pull-left">
+                            {{ login_user_form.submit(class="btn btn-success") }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </form>
+
+    </div>
+
+</div> <!-- /container -->
+
+<script src="https://code.jquery.com/jquery-3.4.1.min.js"
+        integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.bundle.min.js"
+        integrity="sha384-6khuMg9gaYr5AxOqhkVIODVIvm9ynTT5J4V1cfthmT+emCG6yVmEZsRHdxlotUnm"
+        crossorigin="anonymous"></script>
+<script type="application/javascript"
+        src="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.4.0/min/dropzone.min.js">
+</script>
+<script>
+  //https://stackoverflow.com/questions/17872417/integrating-dropzone-js-into-existing-html-form-with-other-fields
+  Dropzone.options.myDropzone = {
+    parallelUploads: 5,
+    paramName: 'file',
+    chunking: true,
+    forceChunking: true,
+    url: '{{ url_for("upload",random_id=random_id) }}',
+    maxFilesize: 1025, // megabytes
+    chunkSize: 10485760, // bytes
+    addRemoveLinks: true
+  };
+
+  $('#submit-all').click(function (e) {
+    let files = [];
+    $('.dz-filename').each(function () {
+      files.push($(this).find('span').text());
+    });
+
+    $('.additional-files').remove();
+    files.forEach(function (e) {
+      $('#form-service').append(
+        $('<input name="files" value="' + e + '">')
+      )
+    });
+  })
+</script>
+</body>
+</html>

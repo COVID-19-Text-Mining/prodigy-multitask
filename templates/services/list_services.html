@@ -9,10 +9,6 @@
     <!-- Bootstrap core CSS -->
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" rel="stylesheet"
           integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
-    <link rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.4.0/min/dropzone.min.css"/>
-    <link rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.4.0/min/basic.min.css"/>
 
     <style>
         body {
@@ -56,7 +52,11 @@
                     <tr>
                         {% if service['active'] %}
                             <td>
-                                <span class="badge badge-primary">Active</span>
+                                {% if service['listening'] %}
+                                    <span class="badge badge-primary">Active</span>
+                                {% else %}
+                                    <span class="badge badge-warning require-page-reload">Starting</span>
+                                {% endif %}
                                 <br/>
                                 <a href="{{ url_for('stop_service', service_id=service['id']) }}">Stop</a>
                             </td>
@@ -76,7 +76,7 @@
                             <span class="badge badge-secondary">$ prodigy</span>
                             {{ service['arguments'] }}</td>
 
-                        {% if service['active'] %}
+                        {% if service['listening'] %}
                             <td>
                                 <a href="{{ url_for('proxy_service', service_id=service['id'], path='') }}"
                                    target="_blank" onclick="alert_deletion();">
@@ -84,6 +84,10 @@
                                 </a> to enter
                             </td>
 
+                        {% elif service['active'] %}
+                            <td>
+                                Please wait...
+                            </td>
                         {% else %}
                             <td>
                                 Please start it first
@@ -133,7 +137,13 @@
       e.preventDefault();
       return false;
     }
-  })
+  });
+
+  if ($('.require-page-reload').length > 0) {
+    setTimeout(function () {
+      location.reload();
+    }, 1000)
+  }
 
 </script>
 </body>

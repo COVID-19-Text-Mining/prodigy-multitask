@@ -15,21 +15,57 @@ import psutil
 import requests
 from flask import (
     Flask, render_template, make_response, request,
-    redirect, url_for, abort, Response, send_file)
+    redirect, url_for, abort, Response)
+from flask_mongoengine import MongoEngine
+from flask_security import MongoEngineUserDatastore, Security, UserMixin, RoleMixin, roles_required
+from mongoengine import StringField, BooleanField, ListField, ReferenceField
 from psutil import NoSuchProcess
 from werkzeug.utils import secure_filename
 
-# import settings
+import settings
 
 app = Flask(__name__)
-# app.config["MONGO_URI"] = "mongodb://{user}:{pwd}@{host}/{db}?authSource={authDB}".format(
-#     host=settings.MONGO_HOSTNAME,
-#     user=quote_plus(settings.MONGO_USERNAME),
-#     pwd=quote_plus(settings.MONGO_PASSWORD),
-#     db=settings.MONGO_DB,
-#     authDB=settings.MONGO_AUTHENTICATION_DB,
-# )
-# mongo = PyMongo(app)
+app.config['MONGODB_HOST'] = settings.MONGO_HOSTNAME
+app.config['MONGODB_DB'] = settings.MONGO_DB
+app.config['MONGODB_USERNAME'] = settings.MONGO_USERNAME
+app.config['MONGODB_PASSWORD'] = settings.MONGO_PASSWORD
+app.config['MONGODB_AUTHENTICATION_SOURCE'] = settings.MONGO_AUTHENTICATION_DB
+app.config['SECRET_KEY'] = settings.SECURITY_KEY
+app.config['SECURITY_PASSWORD_SALT'] = settings.SECURITY_PASSWORD_SALT
+app.config['SECURITY_UNAUTHORIZED_VIEW'] = 'unauthorized'
+
+db = MongoEngine(app)
+
+
+class Role(db.Document, RoleMixin):
+    name = StringField(max_length=80, unique=True)
+    description = StringField(max_length=255)
+
+    meta = {'indexes': ['name'], 'collection': 'prodigy_roles'}
+
+
+class User(db.Document, UserMixin):
+    email = StringField(max_length=255, unique=True, required=True)
+    name = StringField(required=True)
+
+    password = StringField(max_length=255)
+    active = BooleanField(default=True)
+
+    roles = ListField(ReferenceField(Role), default=[])
+
+    meta = {'indexes': ['email'], 'collection': 'prodigy_users'}
+
+    def add_role(self, role_name):
+        for i in self.roles:
+            if i.name == role_name:
+                return
+
+        role = Role.objects.get(name=role_name)
+        self.roles.append(role)
+
+
+user_database = MongoEngineUserDatastore(db, User, Role)
+security = Security(app, user_database)
 
 # Shared state variables
 prodigy_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'prodigy_dir')
@@ -45,17 +81,24 @@ prodigy_services_lock = threading.Lock()
 #             Prodigy PID control
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-def get_next_available_port(start=8080):
+def port_used(port):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.bind(('127.0.0.1', port))
+        used = False
+    except OSError:
+        used = True
+    s.close()
+    return used
 
+
+def get_next_available_port(start=8080):
     port = start
     while True:
-        try:
-            s.bind(('localhost', port))
-            break
-        except OSError:
+        if port_used(port):
             port += 1
-    s.close()
+        else:
+            break
 
     return port
 
@@ -121,17 +164,29 @@ def iter_prodigy_services():
         pid_fn = os.path.join(work_dir, 'prodigy.pid')
 
         alive = False
+        listening = False
         pid = 0
         if os.path.exists(pid_fn):
             with open(pid_fn) as f:
                 pid = int(f.read())
             try:
-                psutil.Process(pid)
+                process = psutil.Process(pid)
+                if process.status() == psutil.STATUS_ZOMBIE:
+                    process.wait()
+                    raise NoSuchProcess('Zombie')
                 alive = True
             except NoSuchProcess:
                 os.unlink(pid_fn)
 
-        yield i, work_dir, alive, pid
+        if alive:
+            try:
+                with open(os.path.join(work_dir, 'prodigy.json')) as f:
+                    port = int(json.load(f)['port'])
+                    listening = port_used(port)
+            except FileNotFoundError:
+                pass
+
+        yield i, work_dir, alive, listening, pid
 
 
 def get_prodigy_pid(work_dir):
@@ -150,7 +205,7 @@ def get_prodigy_pid(work_dir):
 
 def stop_all_prodigy(*_, **__):
     with prodigy_services_lock:
-        for prodigy_id, _, alive, pid in iter_prodigy_services():
+        for prodigy_id, _, alive, listening, pid in iter_prodigy_services():
             if alive:
                 print('Stopping prodigy PID', pid)
                 stop_prodigy(pid)
@@ -177,12 +232,19 @@ def cleanup_temp_dir():
 #             Main Flask app
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+@security._state.unauthorized_handler
+def unauthorized():
+    return "You don't have permission to visit this page. " \
+           "If you have questions, contact the manager of this site", 403
+
+
 @app.route('/')
+@roles_required('admin')
 def list_services():
     with prodigy_services_lock:
         all_services = []
 
-        for prodigy_id, work_dir, alive, pid in iter_prodigy_services():
+        for prodigy_id, work_dir, alive, listening, pid in iter_prodigy_services():
             config_filename = os.path.join(work_dir, 'config.json')
             with open(config_filename) as f:
                 service_config = json.load(f)
@@ -192,6 +254,7 @@ def list_services():
                         'name': str(service_config['name']),
                         'arguments': str(service_config['arguments']),
                         'active': alive,
+                        'listening': listening
                     })
                 except KeyError:
                     app.logger.warning(f'Config file {config_filename} corrupted.')
@@ -201,6 +264,7 @@ def list_services():
 
 
 @app.route('/start/<service_id>')
+@roles_required('admin')
 def start_service(service_id):
     true_path = os.path.join(prodigy_dir, service_id)
     if not os.path.exists(true_path):
@@ -218,6 +282,7 @@ def start_service(service_id):
 
 
 @app.route('/stop/<service_id>')
+@roles_required('admin')
 def stop_service(service_id):
     true_path = os.path.join(prodigy_dir, service_id)
 
@@ -237,6 +302,7 @@ def stop_service(service_id):
 
 
 @app.route('/remove/<service_id>')
+@roles_required('admin')
 def remove_service(service_id):
     true_path = os.path.join(prodigy_dir, service_id)
 
@@ -254,6 +320,7 @@ def remove_service(service_id):
 
 
 @app.route('/console/<service_id>')
+@roles_required('admin')
 def view_console(service_id):
     true_path = os.path.join(prodigy_dir, service_id)
     if not os.path.exists(true_path):
@@ -280,6 +347,7 @@ def view_console(service_id):
 
 
 @app.route('/new_service')
+@roles_required('admin')
 def new_service_desc():
     random_id = str(uuid.uuid1())
     return render_template(
@@ -288,6 +356,7 @@ def new_service_desc():
 
 
 @app.route('/new_service/<random_id>', methods=['POST'])
+@roles_required('admin')
 def create_new_service(random_id):
     form = request.form
     name = re.sub(r'[^a-zA-Z0-9_-]+', '', form.get('name', ''))
@@ -322,6 +391,7 @@ def create_new_service(random_id):
 
 
 @app.route('/upload_file/<random_id>', methods=['POST'])
+@roles_required('admin')
 def upload(random_id):
     # https://stackoverflow.com/questions/44727052/handling-large-file-uploads-with-flask
     file = request.files['file']
