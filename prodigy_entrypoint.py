@@ -60,21 +60,18 @@ db.authenticate(
     settings.MONGO_USERNAME,
     settings.MONGO_PASSWORD,
     settings.MONGO_AUTHENTICATION_DB)
-u = uuid.UUID(config['uuid'])
-date = datetime.fromtimestamp((u.time - 0x01b21dd213814000) * 100 / 1e9)
-date_string = date.strftime("%Y%m%d_%H%M%S")
-collection_dataset_name = 'prodigy_%s_%s_dataset' % (str(config['name']), date_string)
+collection_dataset_name = 'prodigy_%s_dataset' % (str(config['db_collection']),)
 collection_dataset = db[collection_dataset_name]
 collection_dataset.create_index('name', unique=True)
 collection_dataset.create_index([('created', pymongo.ASCENDING)])
 collection_dataset.create_index('session')
 
-collection_example_name = 'prodigy_%s_%s_example' % (str(config['name']), date_string)
+collection_example_name = 'prodigy_%s_example' % (str(config['db_collection']),)
 collection_example = db[collection_example_name]
 collection_example.create_index('input_hash')
 collection_example.create_index('task_hash')
 
-collection_link_name = 'prodigy_%s_%s_link' % (str(config['name']), date_string)
+collection_link_name = 'prodigy_%s_link' % (str(config['db_collection']),)
 collection_link = db[collection_link_name]
 collection_link.create_index('dataset_id')
 collection_link.create_index('example_id')

@@ -39,6 +39,11 @@
                            {% if name %}value="{{ name }}"{% endif %}>
                 </div>
                 <div class="form-group">
+                    <label for="db-collection-name">Collection to save annotations</label>
+                    <input class="form-control" id="db-collection-name" name="db_collection" placeholder="Same as above"
+                           {% if name %}value="{{ db_collection }}"{% endif %}>
+                </div>
+                <div class="form-group">
                     <label for="service-arguments">Prodigy arguments (such as "textcat.manual news_topics input.jsonl
                         --label Technology,Politics")</label>
                     <label for="service-arguments">If you use any files, make sure to upload them below.</label>
@@ -63,7 +68,7 @@
                     <label for="file-uploads">Files uploads (all files will be in the same folder as prodigy)</label>
                     <div class="dropzone" id="myDropzone"></div>
                 </div>
-                <button type="submit" id="submit-all" class="btn btn-primary">Start</button>
+                <button type="submit" id="submit-all" class="btn btn-primary">Save</button>
                 <a href="{{ url_for('list_services') }}" class="btn btn-secondary">Go back</a>
             </form>
         </div>

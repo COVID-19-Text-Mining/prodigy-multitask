@@ -9,13 +9,15 @@ import sys
 import threading
 import time
 import uuid
+import zipfile
+from datetime import datetime
 from urllib.parse import urlparse, parse_qs, urlencode
 
 import psutil
 import requests
 from flask import (
     Flask, render_template, make_response, request,
-    redirect, url_for, abort, Response)
+    redirect, url_for, abort, Response, send_file)
 from flask_login import current_user
 from flask_mongoengine import MongoEngine
 from flask_security import MongoEngineUserDatastore, Security, UserMixin, RoleMixin, roles_required, url_for_security
@@ -255,6 +257,7 @@ def read_config(prodigy_id, default=None):
         return {
             'uuid': str(config['uuid']),
             'name': str(config['name']),
+            'db_collection': str(config['db_collection']),
             'arguments': str(config['arguments']),
             'work_dir': str(config['work_dir']),
             'share': [
@@ -277,6 +280,7 @@ def read_config_or_404(prodigy_id):
         return {
             'uuid': str(config['uuid']),
             'name': str(config['name']),
+            'db_collection': str(config['db_collection']),
             'arguments': str(config['arguments']),
             'work_dir': str(config['work_dir']),
             'share': [
@@ -295,6 +299,7 @@ def write_config_or_404(prodigy_id, config):
         config = {
             'uuid': str(config['uuid']),
             'name': str(config['name']),
+            'db_collection': str(config['db_collection']),
             'arguments': str(config['arguments']),
             'work_dir': str(config['work_dir']),
             'share': [
@@ -354,6 +359,7 @@ def list_services():
                     all_services.append({
                         'id': prodigy_id,
                         'name': str(service_config['name']),
+                        'db_collection': str(service_config['db_collection']),
                         'arguments': str(service_config['arguments']),
                         'active': alive,
                         'listening': listening,
@@ -402,6 +408,27 @@ def remove_share(service_id, share_id):
     return redirect(url_for('list_services', viewsharing=service_id), code=302)
 
 
+@app.route('/download/<service_id>')
+@roles_required('admin')
+def download_folder(service_id):
+    work_dir = get_work_dir_or_404(service_id)
+
+    fn = '%s_%s.zip' % (service_id, datetime.now().strftime('%Y%m%d_%H%M%S'))
+    zip_file_path = os.path.join(temp_dir, fn)
+    zip_file = zipfile.ZipFile(zip_file_path, 'w', zipfile.ZIP_DEFLATED)
+
+    for root, dirs, files in os.walk(work_dir):
+        for file in files:
+            if root == work_dir and file in prodigy_sys_files:
+                continue
+            this_fn = os.path.join(root, file)
+            zip_file.write(
+                this_fn,
+                arcname=os.path.relpath(this_fn, prodigy_dir))
+    zip_file.close()
+    return send_file(zip_file_path, as_attachment=True)
+
+
 @app.route('/start/<service_id>')
 @roles_required('admin')
 def start_service(service_id):
@@ -445,6 +472,7 @@ def edit_service(service_id):
         'services/service_edit_details.html',
         random_id=str(config['uuid']),
         name=str(config['name']),
+        db_collection=str(config['db_collection']),
         arguments=str(config['arguments']),
         files=files
     )
@@ -499,6 +527,9 @@ def new_service_desc():
 def create_new_service(random_id):
     form = request.form
     name = re.sub(r'[^a-zA-Z0-9_-]+', '', form.get('name', ''))
+    db_collection = form.get('db_collection', '')
+    if not db_collection:
+        db_collection = name
     arguments = form.get('arguments', '')
     old_files = list(map(secure_filename, form.getlist('files')))
 
@@ -540,6 +571,7 @@ def create_new_service(random_id):
     config.update({
         'uuid': random_id,
         'name': name,
+        'db_collection': db_collection,
         'arguments': arguments,
         'work_dir': new_service_dir,
         'share': [],

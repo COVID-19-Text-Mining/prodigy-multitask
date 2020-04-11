@@ -52,8 +52,9 @@
                 <thead>
                 <tr>
                     <th scope="col">Status</th>
+                    <th scope="col">DB Collection</th>
                     <th scope="col">Prodigy Arguments</th>
-                    <th scope="col">Start Annotation</th>
+                    <th scope="col">Actions</th>
                     <th scope="col">Console Output</th>
                     <th scope="col" colspan="4">Options</th>
                 </tr>
@@ -75,20 +76,28 @@
                         </td>
 
                         <td>
+                            {{ service['db_collection'] }}
+                        </td>
+
+                        <td>
                             <span class="badge badge-secondary">$ prodigy</span>
-                            {{ service['arguments'] }}</td>
+                            {{ service['arguments'] }}
+                        </td>
 
                         <td align="center">
                             {% if service['listening'] %}
                                 <a href="{{ url_for('proxy_service', service_id=service['id'], path='') }}"
                                    target="_blank">
-                                    Click here
-                                </a> to enter
+                                    Start annotation
+                                </a>
 
                             {% elif service['active'] %}
                                 Please wait...
                             {% else %}
-                                Please start it first
+                                <a href="{{ url_for('download_folder', service_id=service['id']) }}"
+                                   target="_blank">
+                                    Download folder
+                                </a>
                             {% endif %}
                         </td>
 
@@ -132,7 +141,7 @@
                     </tr>
 
                     <tr class="inner-table" style="display:none;">
-                        <td colspan="2"></td>
+                        <td colspan="3"></td>
                         <td colspan="6">
                             <table class="table table-bordered">
                                 {% for share in service['sharing'] %}
