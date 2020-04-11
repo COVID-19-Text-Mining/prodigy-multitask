@@ -18,7 +18,7 @@ from flask import (
     redirect, url_for, abort, Response)
 from flask_login import current_user
 from flask_mongoengine import MongoEngine
-from flask_security import MongoEngineUserDatastore, Security, UserMixin, RoleMixin, roles_required
+from flask_security import MongoEngineUserDatastore, Security, UserMixin, RoleMixin, roles_required, url_for_security
 from mongoengine import StringField, BooleanField, ListField, ReferenceField
 from psutil import NoSuchProcess
 from werkzeug.utils import secure_filename
@@ -76,6 +76,7 @@ if not os.path.exists(prodigy_dir):
 if not os.path.exists(temp_dir):
     os.mkdir(temp_dir)
 prodigy_services_lock = threading.Lock()
+prodigy_sys_files = {'config.json', 'prodigy.json', 'prodigy.pid', 'stdout.txt', 'stderr.txt'}
 
 
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -229,12 +230,86 @@ def cleanup_temp_dir():
                 os.unlink(filename)
 
 
+def get_work_dir_or_404(prodigy_id):
+    true_path = os.path.join(prodigy_dir, prodigy_id)
+    if not os.path.exists(true_path) or not os.path.isdir(true_path):
+        return abort(404)
+    return true_path
+
+
+def read_config(prodigy_id, default=None):
+    true_path = os.path.join(prodigy_dir, prodigy_id)
+    if not os.path.exists(true_path) or not os.path.isdir(true_path):
+        return default
+
+    config_filename = os.path.join(true_path, 'config.json')
+    if not os.path.exists(config_filename) or not os.path.isfile(config_filename):
+        return default
+
+    with open(config_filename) as f:
+        config = json.load(f)
+        # Make a copy to avoid arbitrary code execution
+        return {
+            'uuid': str(config['uuid']),
+            'name': str(config['name']),
+            'arguments': str(config['arguments']),
+            'work_dir': str(config['work_dir']),
+            'share': [
+                {'to': str(x['to']), 'id': str(x['id'])}
+                for x in config['share']
+            ]
+        }
+
+
+def read_config_or_404(prodigy_id):
+    true_path = get_work_dir_or_404(prodigy_id)
+
+    config_filename = os.path.join(true_path, 'config.json')
+    if not os.path.exists(config_filename) or not os.path.isfile(config_filename):
+        return abort(404)
+
+    with open(config_filename) as f:
+        config = json.load(f)
+        # Make a copy to avoid arbitrary code execution
+        return {
+            'uuid': str(config['uuid']),
+            'name': str(config['name']),
+            'arguments': str(config['arguments']),
+            'work_dir': str(config['work_dir']),
+            'share': [
+                {'to': str(x['to']), 'id': str(x['id'])}
+                for x in config['share']
+            ]
+        }
+
+
+def write_config_or_404(prodigy_id, config):
+    true_path = get_work_dir_or_404(prodigy_id)
+
+    config_filename = os.path.join(true_path, 'config.json')
+    with open(config_filename, 'w') as f:
+        # Make a copy to avoid arbitrary code execution
+        config = {
+            'uuid': str(config['uuid']),
+            'name': str(config['name']),
+            'arguments': str(config['arguments']),
+            'work_dir': str(config['work_dir']),
+            'share': [
+                {'to': str(x['to']), 'id': str(x['id'])}
+                for x in config['share']
+            ]
+        }
+        json.dump(config, f)
+
+
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #             Main Flask app
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 @security._state.unauthorized_handler
 def unauthorized():
+    if urlparse(request.url).path == '/':
+        return redirect(url_for_security('login'), code=302)
     return "You don't have permission to visit this page. " \
            "If you have questions, contact the manager of this site", 403
 
@@ -277,26 +352,16 @@ def list_services():
 @app.route('/share/<service_id>/add', methods=['POST'])
 @roles_required('admin')
 def add_share(service_id):
-    true_path = os.path.join(prodigy_dir, service_id)
-    if not os.path.exists(true_path):
-        abort(404)
-        return
-
-    share_to = request.form.get('sharewith')
-
-    config_filename = os.path.join(true_path, 'config.json')
-    with open(config_filename) as f:
-        service_config = json.load(f)
+    service_config = read_config_or_404(service_id)
 
     sharing = service_config.get('share', [])
     sharing.append({
-        'to': share_to,
+        'to': request.form.get('sharewith'),
         'id': str(uuid.uuid1()),
     })
     service_config['share'] = sharing
 
-    with open(config_filename, 'w') as f:
-        json.dump(service_config, f)
+    write_config_or_404(service_id, service_config)
 
     return redirect(url_for('list_services', viewsharing=service_id), code=302)
 
@@ -304,17 +369,10 @@ def add_share(service_id):
 @app.route('/share/<service_id>/remove/<share_id>')
 @roles_required('admin')
 def remove_share(service_id, share_id):
-    true_path = os.path.join(prodigy_dir, service_id)
-    if not os.path.exists(true_path):
-        abort(404)
-        return
-
-    config_filename = os.path.join(true_path, 'config.json')
-    with open(config_filename) as f:
-        service_config = json.load(f)
+    service_config = read_config_or_404(service_id)
 
     new_sharing = []
-    for i in service_config['share']:
+    for i in service_config.get('share', []):
         try:
             if i['id'] != share_id:
                 new_sharing.append(i)
@@ -322,8 +380,7 @@ def remove_share(service_id, share_id):
             pass
     service_config['share'] = new_sharing
 
-    with open(config_filename, 'w') as f:
-        json.dump(service_config, f)
+    write_config_or_404(service_id, service_config)
 
     return redirect(url_for('list_services', viewsharing=service_id), code=302)
 
@@ -331,15 +388,11 @@ def remove_share(service_id, share_id):
 @app.route('/start/<service_id>')
 @roles_required('admin')
 def start_service(service_id):
-    true_path = os.path.join(prodigy_dir, service_id)
-    if not os.path.exists(true_path):
-        abort(404)
-        return
+    true_path = get_work_dir_or_404(service_id)
 
-    with prodigy_services_lock:
-        pid = get_prodigy_pid(true_path)
-        if pid is not None:
-            return redirect(url_for('list_services'))
+    pid = get_prodigy_pid(true_path)
+    if pid is not None:
+        return redirect(url_for('list_services'))
 
     start_prodigy(true_path)
 
@@ -349,35 +402,48 @@ def start_service(service_id):
 @app.route('/stop/<service_id>')
 @roles_required('admin')
 def stop_service(service_id):
-    true_path = os.path.join(prodigy_dir, service_id)
+    true_path = get_work_dir_or_404(service_id)
 
-    with prodigy_services_lock:
-        pid = get_prodigy_pid(true_path)
-
-    if pid is None:
-        return abort(404)
-
-    stop_prodigy(pid)
-    try:
-        os.waitpid(pid, 0)
-    except OSError:
-        pass
+    pid = get_prodigy_pid(true_path)
+    if pid is not None:
+        stop_prodigy(pid)
+        try:
+            os.waitpid(pid, 0)
+        except OSError:
+            pass
 
     return redirect(url_for('list_services'), code=302)
+
+
+@app.route('/edit/<service_id>')
+@roles_required('admin')
+def edit_service(service_id):
+    true_path = get_work_dir_or_404(service_id)
+
+    pid = get_prodigy_pid(true_path)
+    if pid is not None:
+        stop_prodigy(pid)
+
+    config = read_config_or_404(service_id)
+    files = list(filter(lambda x: x not in prodigy_sys_files, os.listdir(true_path)))
+
+    return render_template(
+        'services/service_edit_details.html',
+        random_id=str(config['uuid']),
+        name=str(config['name']),
+        arguments=str(config['arguments']),
+        files=files
+    )
 
 
 @app.route('/remove/<service_id>')
 @roles_required('admin')
 def remove_service(service_id):
-    true_path = os.path.join(prodigy_dir, service_id)
+    true_path = get_work_dir_or_404(service_id)
 
-    with prodigy_services_lock:
-        pid = get_prodigy_pid(true_path)
-        if pid is not None:
-            stop_prodigy(pid)
-
-    if not os.path.exists(true_path):
-        return abort(404)
+    pid = get_prodigy_pid(true_path)
+    if pid is not None:
+        stop_prodigy(pid)
 
     shutil.rmtree(true_path)
 
@@ -387,24 +453,19 @@ def remove_service(service_id):
 @app.route('/console/<service_id>')
 @roles_required('admin')
 def view_console(service_id):
-    true_path = os.path.join(prodigy_dir, service_id)
-    if not os.path.exists(true_path):
-        return abort(404)
+    true_path = get_work_dir_or_404(service_id)
 
-    try:
-        with open(os.path.join(true_path, 'stdout.txt')) as f:
-            stdout = f.read()
-    except FileNotFoundError:
-        stdout = ""
-    except OSError:
-        stdout = "Error, this Prodigy service did not write to stdout.txt"
-    try:
-        with open(os.path.join(true_path, 'stderr.txt')) as f:
-            stderr = f.read()
-    except FileNotFoundError:
-        stderr = ""
-    except OSError:
-        stderr = "Error, this Prodigy service did not write to stdout.txt"
+    def try_read_file(fn):
+        try:
+            with open(fn) as f:
+                return f.read()
+        except FileNotFoundError:
+            return ""
+        except OSError:
+            return "Error, this Prodigy service did not write to stdout.txt"
+
+    stdout = try_read_file(os.path.join(true_path, 'stdout.txt'))
+    stderr = try_read_file(os.path.join(true_path, 'stderr.txt'))
 
     return render_template("services/console_output.html",
                            prodigy_id=service_id,
@@ -414,10 +475,9 @@ def view_console(service_id):
 @app.route('/new_service')
 @roles_required('admin')
 def new_service_desc():
-    random_id = str(uuid.uuid1())
     return render_template(
-        'services/new_service.html',
-        random_id=random_id)
+        'services/service_edit_details.html',
+        random_id=str(uuid.uuid1()))
 
 
 @app.route('/new_service/<random_id>', methods=['POST'])
@@ -425,27 +485,53 @@ def new_service_desc():
 def create_new_service(random_id):
     form = request.form
     name = re.sub(r'[^a-zA-Z0-9_-]+', '', form.get('name', ''))
-    if os.path.exists(os.path.join(prodigy_dir, name)):
-        return 'The service with name "%s" already exists.' % name, 400
-
     arguments = form.get('arguments', '')
-    files = list(map(secure_filename, form.getlist('files')))
-    for i in files:
-        if not os.path.exists(os.path.join(temp_dir, '%s--%s' % (random_id, i))):
-            return 'File upload "%s" does not exist.' % name, 400
+    old_files = list(map(secure_filename, form.getlist('files')))
+
+    if not name:
+        return 'Name cannot be empty', 400
+
+    copy_files = {}
+    for file in old_files.copy():
+        if file in prodigy_sys_files:
+            return 'Filename reserved for Prodigy system', 400
+
+        temp_file = os.path.join(temp_dir, '%s--%s' % (random_id, file))
+        if os.path.exists(temp_file):
+            copy_files[file] = temp_file
+            old_files.remove(file)
 
     new_service_dir = os.path.join(prodigy_dir, name)
-    os.mkdir(new_service_dir)
+    if not os.path.exists(new_service_dir):
+        os.mkdir(new_service_dir)
 
-    with open(os.path.join(new_service_dir, 'config.json'), 'w') as f:
-        json.dump({
-            'name': name,
-            'arguments': arguments,
-            'work_dir': new_service_dir
-        }, f)
-    for i in files:
-        src = os.path.join(temp_dir, '%s--%s' % (random_id, i))
-        os.rename(src, os.path.join(new_service_dir, i))
+    config_fn = os.path.join(new_service_dir, 'config.json')
+    config = {}
+    if os.path.exists(config_fn):
+        with open(config_fn) as f:
+            config = json.load(f)
+            if random_id != config['uuid']:
+                return 'UUID mismatch, did you tamper with the request?', 400
+
+    # Remove old files
+    for file in os.listdir(new_service_dir):
+        if file in prodigy_sys_files:
+            continue
+        if file not in old_files:
+            os.unlink(os.path.join(new_service_dir, file))
+    # Copy new files
+    for file, src in copy_files.items():
+        os.rename(src, os.path.join(new_service_dir, file))
+
+    config.update({
+        'uuid': random_id,
+        'name': name,
+        'arguments': arguments,
+        'work_dir': new_service_dir
+    })
+
+    with open(config_fn, 'w') as f:
+        json.dump(config, f)
 
     try:
         cleanup_temp_dir()
@@ -461,7 +547,11 @@ def upload(random_id):
     # https://stackoverflow.com/questions/44727052/handling-large-file-uploads-with-flask
     file = request.files['file']
 
-    save_path = os.path.join(temp_dir, random_id + '--' + secure_filename(file.filename))
+    filename = secure_filename(file.filename)
+    if filename in prodigy_sys_files:
+        return 'Filename reserved for Prodigy system', 400
+
+    save_path = os.path.join(temp_dir, random_id + '--' + filename)
     current_chunk = int(request.form['dzchunkindex'])
 
     # If the file already exists it's ok if we are appending to it,
@@ -500,13 +590,13 @@ def upload(random_id):
 
 
 def _proxy_response(service_id, request_path, additional_query=None):
-    true_path = os.path.join(prodigy_dir, service_id)
-    with prodigy_services_lock:
-        pid = get_prodigy_pid(true_path)
-        if pid is None:
-            return 'The page requested is not found', 404
-        with open(os.path.join(true_path, 'prodigy.json')) as f:
-            port = int(json.load(f)['port'])
+    true_path = get_work_dir_or_404(service_id)
+
+    pid = get_prodigy_pid(true_path)
+    if pid is None:
+        return 'The page requested is not found', 404
+    with open(os.path.join(true_path, 'prodigy.json')) as f:
+        port = int(json.load(f)['port'])
 
     query = additional_query or {}
     query.update(parse_qs(request.query_string))
@@ -536,13 +626,8 @@ def _proxy_response(service_id, request_path, additional_query=None):
 
 
 def share_id_valid(prodigy_id, share_id):
-    config_fn = os.path.join(prodigy_dir, prodigy_id, 'config.json')
-    try:
-        with open(config_fn) as f:
-            config = json.load(f)
-            return share_id in (x['id'] for x in config.get('share', []))
-    except (KeyError, OSError):
-        return False
+    config = read_config_or_404(prodigy_id)
+    return share_id in (x['id'] for x in config.get('share', []))
 
 
 @app.errorhandler(404)

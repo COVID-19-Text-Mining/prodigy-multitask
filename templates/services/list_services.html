@@ -23,8 +23,8 @@
             margin: 0;
         }
 
-        .click-share {
-            cursor: pointer;
+        th {
+            text-align: center;
         }
     </style>
 </head>
@@ -52,11 +52,10 @@
                 <thead>
                 <tr>
                     <th scope="col">Status</th>
-                    <th scope="col">Name</th>
                     <th scope="col">Prodigy Arguments</th>
                     <th scope="col">Start Annotation</th>
                     <th scope="col">Console Output</th>
-                    <th scope="col">Remove Prodigy</th>
+                    <th scope="col" colspan="4">Options</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -69,19 +68,10 @@
                                 {% else %}
                                     <span class="badge badge-warning require-page-reload">Starting</span>
                                 {% endif %}
-                                <br/>
-                                <a href="{{ url_for('stop_service', service_id=service['id']) }}">Stop</a>
                             {% else %}
                                 <span class="badge badge-danger">Inactive</span>
-                                <br/>
-                                <a href="{{ url_for('start_service', service_id=service['id']) }}">Start</a>
                             {% endif %}
-                        </td>
-
-                        <td align="center">
                             {{ service['name'] }}
-                            <br/>
-                            <button class="btn btn-sm btn-secondary">Sharing options</button>
                         </td>
 
                         <td>
@@ -108,8 +98,33 @@
                             </a>
                         </td>
 
+                        <td>
+                            {% if service['active'] %}
+                                <a class="btn btn-sm btn-warning"
+                                   href="{{ url_for('stop_service', service_id=service['id']) }}">
+                                    Stop
+                                </a>
+                            {% else %}
+                                <a class="btn btn-sm btn-primary"
+                                   href="{{ url_for('start_service', service_id=service['id']) }}">
+                                    Start
+                                </a>
+                            {% endif %}
+                        </td>
+
                         <td align="center">
-                            <a class="btn btn-danger confirm_removal"
+                            <a class="btn btn-sm btn-info  {% if service['active'] %} confirm-edit {% endif %}"
+                               href="{{ url_for('edit_service', service_id=service['id']) }}">
+                                Edit
+                            </a>
+                        </td>
+
+                        <td align="center">
+                            <button class="btn btn-sm btn-secondary toggle-sharing">Sharing</button>
+                        </td>
+
+                        <td align="center">
+                            <a class="btn btn-sm btn-danger confirm_removal"
                                href="{{ url_for('remove_service', service_id=service['id']) }}">
                                 Remove
                             </a>
@@ -118,7 +133,7 @@
 
                     <tr class="inner-table" style="display:none;">
                         <td colspan="2"></td>
-                        <td colspan="4">
+                        <td colspan="6">
                             <table class="table table-bordered">
                                 {% for share in service['sharing'] %}
                                     <tr>
@@ -170,34 +185,42 @@
         integrity="sha384-6khuMg9gaYr5AxOqhkVIODVIvm9ynTT5J4V1cfthmT+emCG6yVmEZsRHdxlotUnm"
         crossorigin="anonymous"></script>
 <script>
-  $('.confirm_removal').click(function (e) {
-    if (!confirm("Do you really want to remove this Prodigy instance? The database will be purged!")) {
-      e.preventDefault();
-      return false;
+    $('.confirm_removal').click(function (e) {
+        if (!confirm("Do you really want to remove this Prodigy instance? The database will be purged!")) {
+            e.preventDefault();
+            return false;
+        }
+    });
+
+    $('.confirm-edit').click(function (e) {
+        if (!confirm("This service is running. Editing it will force it to stop first. Continue?")) {
+            e.preventDefault();
+            return false;
+        }
+    });
+
+
+    $('.remove-sharing').click(function (e) {
+        if (!confirm("Are you sure you want to remove this sharing link?")) {
+            e.preventDefault();
+            return false;
+        }
+    });
+
+    if ($('.require-page-reload').length > 0) {
+        setTimeout(function () {
+            location.reload();
+        }, 1000)
     }
-  });
 
-  $('.remove-sharing').click(function (e) {
-    if (!confirm("Are you sure you want to remove this sharing link?")) {
-      e.preventDefault();
-      return false;
-    }
-  });
+    $('.toggle-sharing').click(function () {
+        $(this).closest('tr').next().toggle();
+    });
 
-  if ($('.require-page-reload').length > 0) {
-    setTimeout(function () {
-      location.reload();
-    }, 1000)
-  }
-
-  $('.click-share').click(function () {
-    $(this).next().toggle();
-  });
-
-  const urlParams = new URLSearchParams(window.location.search);
-  urlParams.getAll('viewsharing').forEach(function (v) {
-    $('#service-' + v).next().show();
-  });
+    const urlParams = new URLSearchParams(window.location.search);
+    urlParams.getAll('viewsharing').forEach(function (v) {
+        $('#service-' + v).next().show();
+    });
 
 </script>
 </body>
