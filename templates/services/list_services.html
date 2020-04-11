@@ -14,6 +14,18 @@
         body {
             margin-top: 50px;
         }
+
+        .inner-table > td {
+            padding: 0;
+        }
+
+        .inner-table > td > table {
+            margin: 0;
+        }
+
+        .click-share {
+            cursor: pointer;
+        }
     </style>
 </head>
 
@@ -49,9 +61,9 @@
                 </thead>
                 <tbody>
                 {% for service in all_services %}
-                    <tr>
-                        {% if service['active'] %}
-                            <td>
+                    <tr class="click-share" id="service-{{ service['id'] }}">
+                        <td align="center">
+                            {% if service['active'] %}
                                 {% if service['listening'] %}
                                     <span class="badge badge-primary">Active</span>
                                 {% else %}
@@ -59,52 +71,84 @@
                                 {% endif %}
                                 <br/>
                                 <a href="{{ url_for('stop_service', service_id=service['id']) }}">Stop</a>
-                            </td>
-
-                        {% else %}
-                            <td>
+                            {% else %}
                                 <span class="badge badge-danger">Inactive</span>
                                 <br/>
                                 <a href="{{ url_for('start_service', service_id=service['id']) }}">Start</a>
-                            </td>
+                            {% endif %}
+                        </td>
 
-                        {% endif %}
-
-                        <td>{{ service['name'] }}</td>
+                        <td align="center">
+                            {{ service['name'] }}
+                            <br/>
+                            <button class="btn btn-sm btn-secondary">Sharing options</button>
+                        </td>
 
                         <td>
                             <span class="badge badge-secondary">$ prodigy</span>
                             {{ service['arguments'] }}</td>
 
-                        {% if service['listening'] %}
-                            <td>
+                        <td align="center">
+                            {% if service['listening'] %}
                                 <a href="{{ url_for('proxy_service', service_id=service['id'], path='') }}"
-                                   target="_blank" onclick="alert_deletion();">
+                                   target="_blank">
                                     Click here
                                 </a> to enter
-                            </td>
 
-                        {% elif service['active'] %}
-                            <td>
+                            {% elif service['active'] %}
                                 Please wait...
-                            </td>
-                        {% else %}
-                            <td>
+                            {% else %}
                                 Please start it first
-                            </td>
-                        {% endif %}
+                            {% endif %}
+                        </td>
 
-                        <td>
+                        <td align="center">
                             <a href="{{ url_for('view_console', service_id=service['id']) }}" target="_blank">
                                 View console
                             </a>
                         </td>
 
-                        <td>
+                        <td align="center">
                             <a class="btn btn-danger confirm_removal"
                                href="{{ url_for('remove_service', service_id=service['id']) }}">
                                 Remove
                             </a>
+                        </td>
+                    </tr>
+
+                    <tr class="inner-table" style="display:none;">
+                        <td colspan="2"></td>
+                        <td colspan="4">
+                            <table class="table table-bordered">
+                                {% for share in service['sharing'] %}
+                                    <tr>
+                                        <td>Share with: {{ share['to'] }}</td>
+                                        <td>Share link: <a href="{{ url_for('share_proxy_service',
+                                        service_id=service['id'],
+                                        share_id=share['id'], path='') }}"
+                                                           target="_blank">Here</a></td>
+                                        <td>
+                                            <a class="btn btn-sm btn-danger remove-sharing"
+                                               href="{{ url_for('remove_share',
+                                               service_id=service['id'], share_id=share['id']) }}">
+                                                Remove sharing
+                                            </a>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                                <tr>
+                                    <td colspan="3">
+                                        <form method="POST"
+                                              action="{{ url_for('add_share', service_id=service['id']) }}">
+                                            <label>Add sharing with:</label>
+                                            <input name="sharewith" id="sharewith" placeholder="Name">
+                                            <button type="submit" class="btn btn-sm btn-primary">
+                                                Add sharing
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            </table>
                         </td>
                     </tr>
                 {% endfor %}
@@ -126,14 +170,15 @@
         integrity="sha384-6khuMg9gaYr5AxOqhkVIODVIvm9ynTT5J4V1cfthmT+emCG6yVmEZsRHdxlotUnm"
         crossorigin="anonymous"></script>
 <script>
-  function alert_deletion() {
-    alert("Be sure to download database file after you are done.\n" +
-      "The Docker container might be destroyed and data might be removed.\n\n" +
-      "If any Prodigy service page fails to open, just try again in a few secs, or restart it.\n")
-  }
-
   $('.confirm_removal').click(function (e) {
     if (!confirm("Do you really want to remove this Prodigy instance? The database will be purged!")) {
+      e.preventDefault();
+      return false;
+    }
+  });
+
+  $('.remove-sharing').click(function (e) {
+    if (!confirm("Are you sure you want to remove this sharing link?")) {
       e.preventDefault();
       return false;
     }
@@ -144,6 +189,15 @@
       location.reload();
     }, 1000)
   }
+
+  $('.click-share').click(function () {
+    $(this).next().toggle();
+  });
+
+  const urlParams = new URLSearchParams(window.location.search);
+  urlParams.getAll('viewsharing').forEach(function (v) {
+    $('#service-' + v).next().show();
+  });
 
 </script>
 </body>

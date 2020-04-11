@@ -9,13 +9,14 @@ import sys
 import threading
 import time
 import uuid
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs, urlencode
 
 import psutil
 import requests
 from flask import (
     Flask, render_template, make_response, request,
     redirect, url_for, abort, Response)
+from flask_login import current_user
 from flask_mongoengine import MongoEngine
 from flask_security import MongoEngineUserDatastore, Security, UserMixin, RoleMixin, roles_required
 from mongoengine import StringField, BooleanField, ListField, ReferenceField
@@ -248,19 +249,83 @@ def list_services():
             config_filename = os.path.join(work_dir, 'config.json')
             with open(config_filename) as f:
                 service_config = json.load(f)
+                sharing = []
+                for i in service_config.get('share', []):
+                    try:
+                        sharing.append({
+                            'to': i['to'],
+                            'id': i['id'],
+                        })
+                    except KeyError:
+                        pass
                 try:
                     all_services.append({
                         'id': prodigy_id,
                         'name': str(service_config['name']),
                         'arguments': str(service_config['arguments']),
                         'active': alive,
-                        'listening': listening
+                        'listening': listening,
+                        'sharing': sharing,
                     })
                 except KeyError:
                     app.logger.warning(f'Config file {config_filename} corrupted.')
 
     return render_template(
         'services/list_services.html', all_services=all_services)
+
+
+@app.route('/share/<service_id>/add', methods=['POST'])
+@roles_required('admin')
+def add_share(service_id):
+    true_path = os.path.join(prodigy_dir, service_id)
+    if not os.path.exists(true_path):
+        abort(404)
+        return
+
+    share_to = request.form.get('sharewith')
+
+    config_filename = os.path.join(true_path, 'config.json')
+    with open(config_filename) as f:
+        service_config = json.load(f)
+
+    sharing = service_config.get('share', [])
+    sharing.append({
+        'to': share_to,
+        'id': str(uuid.uuid1()),
+    })
+    service_config['share'] = sharing
+
+    with open(config_filename, 'w') as f:
+        json.dump(service_config, f)
+
+    return redirect(url_for('list_services', viewsharing=service_id), code=302)
+
+
+@app.route('/share/<service_id>/remove/<share_id>')
+@roles_required('admin')
+def remove_share(service_id, share_id):
+    true_path = os.path.join(prodigy_dir, service_id)
+    if not os.path.exists(true_path):
+        abort(404)
+        return
+
+    config_filename = os.path.join(true_path, 'config.json')
+    with open(config_filename) as f:
+        service_config = json.load(f)
+
+    new_sharing = []
+    for i in service_config['share']:
+        try:
+            if i['id'] != share_id:
+                new_sharing.append(i)
+        except KeyError:
+            pass
+    service_config['share'] = new_sharing
+
+    with open(config_filename, 'w') as f:
+        json.dump(service_config, f)
+
+    return redirect(url_for('list_services', viewsharing=service_id), code=302)
 
 
 @app.route('/start/<service_id>')
@@ -434,7 +499,7 @@ def upload(random_id):
     return make_response(("Chunk upload successful", 200))
 
 
-def _proxy_response(service_id, request_path):
+def _proxy_response(service_id, request_path, additional_query=None):
     true_path = os.path.join(prodigy_dir, service_id)
     with prodigy_services_lock:
         pid = get_prodigy_pid(true_path)
@@ -443,9 +508,12 @@ def _proxy_response(service_id, request_path):
         with open(os.path.join(true_path, 'prodigy.json')) as f:
             port = int(json.load(f)['port'])
 
+    query = additional_query or {}
+    query.update(parse_qs(request.query_string))
+    new_qs = urlencode(query)
     query_ending = ''
-    if request.query_string:
-        query_ending = '?' + request.query_string.decode()
+    if new_qs:
+        query_ending = '?' + new_qs
     if request_path.startswith('/'):
         request_path = request_path[1:]
     url = 'http://localhost:%d/%s%s' % (port, request_path, query_ending)
@@ -467,20 +535,42 @@ def _proxy_response(service_id, request_path):
     return response
 
 
+def share_id_valid(prodigy_id, share_id):
+    config_fn = os.path.join(prodigy_dir, prodigy_id, 'config.json')
+    try:
+        with open(config_fn) as f:
+            config = json.load(f)
+            return share_id in (x['id'] for x in config.get('share', []))
+    except (KeyError, OSError):
+        return False
+
+
 @app.errorhandler(404)
 def redirect_proxy(_):
     if 'referer' not in request.headers:
         return 'The page requested is not found', 404
 
     o = urlparse(request.headers.get('referer'))
-    m = re.match(r'/prodigy/([^/]+)', o.path)
-    if not m:
-        return 'The page requested is not found', 404
-    service_id = m.group(1)
 
-    path = urlparse(request.url).path
+    m = re.match(r'^/prodigy/([^/]+)/?$', o.path)
+    if m:
+        # This type of annotation requires auth
+        if not current_user.has_role('admin'):
+            return app.login_manager.unauthorized()
 
-    return _proxy_response(service_id, path)
+        service_id = m.group(1)
+        path = urlparse(request.url).path
+        return _proxy_response(service_id, path)
+
+    m = re.match(r'^/prodigy/([^/]+)/share/([^/]+)/?$', o.path)
+    if m:
+        service_id = m.group(1)
+        share_id = m.group(2)
+        if share_id_valid(service_id, share_id):
+            path = urlparse(request.url).path
+            return _proxy_response(service_id, path)
+
+    return 'The page requested is not found', 404
 
 
 @app.route('/prodigy/<service_id>/',
@@ -488,5 +578,25 @@ def redirect_proxy(_):
            methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 @app.route('/prodigy/<service_id>/<path:path>',
            methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+@roles_required('admin')
 def proxy_service(service_id, path):
     return _proxy_response(service_id, path)
+
+
+@app.route('/prodigy/<service_id>/share/<share_id>/',
+           defaults={'path': '/'},
+           methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+@app.route('/prodigy/<service_id>/share/<share_id>/<path:path>',
+           methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+def share_proxy_service(service_id, share_id, path):
+    session_id = request.args.get('session', None)
+    if session_id is None:
+        return redirect(url_for(
+            'share_proxy_service',
+            service_id=service_id, share_id=share_id, path=path,
+            session=share_id))
+
+    if share_id_valid(service_id, share_id):
+        return _proxy_response(service_id, path)
+
+    return abort(404)
