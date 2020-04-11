@@ -20,7 +20,7 @@ from flask_login import current_user
 from flask_mongoengine import MongoEngine
 from flask_security import MongoEngineUserDatastore, Security, UserMixin, RoleMixin, roles_required, url_for_security
 from mongoengine import StringField, BooleanField, ListField, ReferenceField
-from psutil import NoSuchProcess
+from psutil import NoSuchProcess, ZombieProcess
 from werkzeug.utils import secure_filename
 
 import settings
@@ -31,6 +31,7 @@ app.config['MONGODB_DB'] = settings.MONGO_DB
 app.config['MONGODB_USERNAME'] = settings.MONGO_USERNAME
 app.config['MONGODB_PASSWORD'] = settings.MONGO_PASSWORD
 app.config['MONGODB_AUTHENTICATION_SOURCE'] = settings.MONGO_AUTHENTICATION_DB
+app.config['MONGODB_CONNECT'] = False
 app.config['SECRET_KEY'] = settings.SECURITY_KEY
 app.config['SECURITY_PASSWORD_SALT'] = settings.SECURITY_PASSWORD_SALT
 app.config['SECURITY_UNAUTHORIZED_VIEW'] = 'unauthorized'
@@ -146,10 +147,11 @@ def kill_pid_and_children(
         parent = psutil.Process(pid)
     except psutil.NoSuchProcess:
         return
+    children_pid = []
     for process in parent.children():
+        children_pid.append(process.pid)
         kill_pid_and_children(process.pid)
     parent.send_signal(sig)
-    parent.wait()
 
 
 def stop_prodigy(pid):
@@ -174,7 +176,8 @@ def iter_prodigy_services():
             try:
                 process = psutil.Process(pid)
                 if process.status() == psutil.STATUS_ZOMBIE:
-                    process.wait()
+                    # uwsgi will do this for us
+                    # process.wait()
                     raise NoSuchProcess('Zombie')
                 alive = True
             except NoSuchProcess:
@@ -278,7 +281,7 @@ def read_config_or_404(prodigy_id):
             'work_dir': str(config['work_dir']),
             'share': [
                 {'to': str(x['to']), 'id': str(x['id'])}
-                for x in config['share']
+                for x in config.get('share', [])
             ]
         }
 
@@ -300,6 +303,20 @@ def write_config_or_404(prodigy_id, config):
             ]
         }
         json.dump(config, f)
+
+
+@app.teardown_appcontext
+def cleanup_zombie(_):
+    self = psutil.Process()
+    ppid_map = psutil._ppid_map()
+    for pid, ppid in ppid_map.items():
+        if ppid == self.pid:
+            try:
+                psutil.Process(pid)
+            except ZombieProcess:
+                os.waitpid(pid, 0)
+            except NoSuchProcess:
+                pass
 
 
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -407,10 +424,7 @@ def stop_service(service_id):
     pid = get_prodigy_pid(true_path)
     if pid is not None:
         stop_prodigy(pid)
-        try:
-            os.waitpid(pid, 0)
-        except OSError:
-            pass
+        os.unlink(os.path.join(true_path, 'prodigy.pid'))
 
     return redirect(url_for('list_services'), code=302)
 
@@ -527,7 +541,8 @@ def create_new_service(random_id):
         'uuid': random_id,
         'name': name,
         'arguments': arguments,
-        'work_dir': new_service_dir
+        'work_dir': new_service_dir,
+        'share': [],
     })
 
     with open(config_fn, 'w') as f:
