@@ -464,6 +464,7 @@ def edit_service(service_id):
     pid = get_prodigy_pid(true_path)
     if pid is not None:
         stop_prodigy(pid)
+        os.unlink(os.path.join(true_path, 'prodigy.pid'))
 
     config = read_config_or_404(service_id)
     files = list(filter(lambda x: x not in prodigy_sys_files, os.listdir(true_path)))
