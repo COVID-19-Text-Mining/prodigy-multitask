@@ -574,7 +574,7 @@ def create_new_service(random_id):
         'db_collection': db_collection,
         'arguments': arguments,
         'work_dir': new_service_dir,
-        'share': [],
+        'share': config.get('share', []),
     })
 
     with open(config_fn, 'w') as f:
@@ -641,7 +641,7 @@ def _proxy_response(service_id, request_path, additional_query=None):
 
     pid = get_prodigy_pid(true_path)
     if pid is None:
-        return 'The page requested is not found', 404
+        return 'The annotation page you requested seems to have died, please contact site admin.', 404
     with open(os.path.join(true_path, 'prodigy.json')) as f:
         port = int(json.load(f)['port'])
 
@@ -675,6 +675,14 @@ def _proxy_response(service_id, request_path, additional_query=None):
 def share_id_valid(prodigy_id, share_id):
     config = read_config_or_404(prodigy_id)
     return share_id in (x['id'] for x in config.get('share', []))
+
+
+def get_share_name_or_404(prodigy_id, share_id):
+    config = read_config_or_404(prodigy_id)
+    for x in config.get('share', []):
+        if x['id'] == share_id:
+            return x['to']
+    return abort(404)
 
 
 @app.errorhandler(404)
@@ -721,14 +729,13 @@ def proxy_service(service_id, path):
 @app.route('/prodigy/<service_id>/share/<share_id>/<path:path>',
            methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 def share_proxy_service(service_id, share_id, path):
+    share_name = get_share_name_or_404(service_id, share_id)
+
     session_id = request.args.get('session', None)
-    if session_id is None:
+    if session_id is None or session_id != share_name:
         return redirect(url_for(
             'share_proxy_service',
             service_id=service_id, share_id=share_id, path=path,
-            session=share_id))
+            session=share_name))
 
-    if share_id_valid(service_id, share_id):
-        return _proxy_response(service_id, path)
-
-    return abort(404)
+    return _proxy_response(service_id, path)
