@@ -1,10 +1,10 @@
-bcrypt
-flask
-Flask-PyMongo
-Flask-Security
-Flask-MongoEngine
+bcrypt==3.1.7
+flask==1.1.2
+Flask-PyMongo==2.3.0
+Flask-Security==3.0.0
+Flask-MongoEngine==0.9.5
 prodigy
 psutil
 pymongo
-requests
+requests==2.23.0
 werkzeug

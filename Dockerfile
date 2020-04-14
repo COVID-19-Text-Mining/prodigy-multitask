@@ -2,11 +2,14 @@ FROM tiangolo/uwsgi-nginx-flask:python3.6-alpine3.7
 COPY ./ /app
 
 RUN apk update
-RUN apk add libstdc++ libgcc
+RUN apk add libstdc++ libgcc libffi-dev
 # When building wheels, add this
 # RUN apk add --no-cache --virtual .build-deps make automake gcc g++ python3-dev linux-headers
 RUN pip install cython
-RUN pip install /app/wheels/blis-0.4.1-cp36-cp36m-linux_x86_64.whl\
+RUN pip install \
+    /app/wheels/bcrypt-3.1.7-cp36-cp36m-linux_x86_64.whl\
+    /app/wheels/blis-0.4.1-cp36-cp36m-linux_x86_64.whl\
+    /app/wheels/cffi-1.14.0-cp36-cp36m-linux_x86_64.whl\
     /app/wheels/cymem-2.0.3-cp36-cp36m-linux_x86_64.whl\
     /app/wheels/httptools-0.1.1-cp36-cp36m-linux_x86_64.whl\
     /app/wheels/MarkupSafe-1.1.1-cp36-none-any.whl\
