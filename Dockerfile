@@ -25,9 +25,8 @@ RUN pip install \
     /app/wheels/thinc-7.4.0-cp36-cp36m-linux_x86_64.whl\
     /app/wheels/toolz-0.10.0-cp36-none-any.whl\
     /app/wheels/uvloop-0.14.0-cp36-cp36m-linux_x86_64.whl\
-    /app/wheels/websockets-8.1-cp36-cp36m-linux_x86_64.whl
-
-RUN pip install /app/prodigy-1.9.9-cp36.cp37.cp38-cp36m.cp37m.cp38-linux_x86_64.whl
+    /app/wheels/websockets-8.1-cp36-cp36m-linux_x86_64.whl\
+    /app/prodigy-1.9.9-cp36.cp37.cp38-cp36m.cp37m.cp38-linux_x86_64.whl
 RUN pip install -r /app/requirements.txt
 
 # Cleanup
