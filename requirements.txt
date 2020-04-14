@@ -1,3 +1,4 @@
+bcrypt
 flask
 Flask-PyMongo
 Flask-Security
