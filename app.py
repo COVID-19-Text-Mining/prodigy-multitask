@@ -15,12 +15,14 @@ from urllib.parse import urlparse, parse_qs, urlencode
 
 import psutil
 import requests
+from bson import ObjectId
 from flask import (
     Flask, render_template, make_response, request,
     redirect, url_for, abort, Response, send_file)
 from flask_login import current_user
 from flask_mongoengine import MongoEngine
 from flask_security import MongoEngineUserDatastore, Security, UserMixin, RoleMixin, roles_required, url_for_security
+from gridfs import GridFS
 from mongoengine import StringField, BooleanField, ListField, ReferenceField
 from psutil import NoSuchProcess, ZombieProcess
 from werkzeug.utils import secure_filename
@@ -39,6 +41,12 @@ app.config['SECURITY_PASSWORD_SALT'] = settings.SECURITY_PASSWORD_SALT
 app.config['SECURITY_UNAUTHORIZED_VIEW'] = 'unauthorized'
 
 db = MongoEngine(app)
+
+
+def get_archive_col():
+    return GridFS(
+        db.connection[settings.MONGO_DB],
+        'prodigy_instance_snapshots')
 
 
 class Role(db.Document, RoleMixin):
@@ -210,6 +218,24 @@ def get_prodigy_pid(work_dir):
     return None
 
 
+def zip_prodigy_instance(service_id, work_dir):
+    fn = '%s_%s.zip' % (service_id, datetime.now().strftime('%Y%m%d_%H%M%S'))
+    zip_file_path = os.path.join(temp_dir, fn)
+    zip_file = zipfile.ZipFile(zip_file_path, 'w', zipfile.ZIP_DEFLATED)
+
+    for root, dirs, files in os.walk(work_dir):
+        for file in files:
+            if root == work_dir and file in prodigy_sys_files:
+                continue
+            this_fn = os.path.join(root, file)
+            zip_file.write(
+                this_fn,
+                arcname=os.path.relpath(this_fn, prodigy_dir))
+    zip_file.close()
+
+    return zip_file_path
+
+
 def stop_all_prodigy(*_, **__):
     with prodigy_services_lock:
         for prodigy_id, _, alive, listening, pid in iter_prodigy_services():
@@ -235,9 +261,16 @@ def cleanup_temp_dir():
                 os.unlink(filename)
 
 
-def get_work_dir_or_404(prodigy_id):
+def get_work_dir(prodigy_id):
     true_path = os.path.join(prodigy_dir, prodigy_id)
     if not os.path.exists(true_path) or not os.path.isdir(true_path):
+        return None
+    return true_path
+
+
+def get_work_dir_or_404(prodigy_id):
+    true_path = get_work_dir(prodigy_id)
+    if true_path is None:
         return abort(404)
     return true_path
 
@@ -389,7 +422,7 @@ def add_share(service_id):
     return redirect(url_for('list_services', viewsharing=service_id), code=302)
 
 
-@app.route('/share/<service_id>/remove/<share_id>')
+@app.route('/share/<service_id>/remove/<share_id>', methods=['POST'])
 @roles_required('admin')
 def remove_share(service_id, share_id):
     service_config = read_config_or_404(service_id)
@@ -412,24 +445,100 @@ def remove_share(service_id, share_id):
 @roles_required('admin')
 def download_folder(service_id):
     work_dir = get_work_dir_or_404(service_id)
+    zip_file_path = zip_prodigy_instance(service_id, work_dir)
 
-    fn = '%s_%s.zip' % (service_id, datetime.now().strftime('%Y%m%d_%H%M%S'))
-    zip_file_path = os.path.join(temp_dir, fn)
-    zip_file = zipfile.ZipFile(zip_file_path, 'w', zipfile.ZIP_DEFLATED)
-
-    for root, dirs, files in os.walk(work_dir):
-        for file in files:
-            if root == work_dir and file in prodigy_sys_files:
-                continue
-            this_fn = os.path.join(root, file)
-            zip_file.write(
-                this_fn,
-                arcname=os.path.relpath(this_fn, prodigy_dir))
-    zip_file.close()
     return send_file(zip_file_path, as_attachment=True)
 
 
-@app.route('/start/<service_id>')
+@app.route('/archive/recover/<db_id>', methods=["POST"])
+@roles_required('admin')
+def recover_archives(db_id):
+    snapshots_grid_fs = get_archive_col()
+
+    file = snapshots_grid_fs.get(ObjectId(db_id))
+
+    true_path = get_work_dir(file.prodigy_id)
+    if true_path is not None:
+        pid = get_prodigy_pid(true_path)
+        if pid is not None:
+            stop_prodigy(pid)
+            os.unlink(os.path.join(true_path, 'prodigy.pid'))
+
+    zipped = zipfile.ZipFile(file)
+    zipped.extractall(path=prodigy_dir)
+
+    with open(os.path.join(true_path, 'config.json'), 'w') as f:
+        json.dump(file.config, f)
+
+    return redirect(url_for('list_services'), code=302)
+
+
+@app.route('/archive/delete/<db_id>', methods=['POST'])
+@roles_required('admin')
+def delete_archives(db_id):
+    snapshots_grid_fs = get_archive_col()
+    snapshots_grid_fs.delete(ObjectId(db_id))
+
+    return redirect(url_for('list_archives'), code=302)
+
+
+@app.route('/archive/list')
+@roles_required('admin')
+def list_archives():
+    snapshots_grid_fs = get_archive_col()
+    archives = snapshots_grid_fs.find()
+    return render_template(
+        'services/list_archives.html',
+        archives=[{
+            'db_id': str(x._id),
+            'prodigy_id': x.prodigy_id,
+            'arguments': x.arguments,
+            'inserted': x.inserted.strftime('%Y-%m-%d %H:%M:%S'),
+        } for x in archives])
+
+
+@app.route('/archive/save_all', methods=['POST'])
+@roles_required('admin')
+def archive_all_instances():
+    snapshots_grid_fs = get_archive_col()
+    archived = []
+    for prodigy_id, work_dir, alive, listening, pid in iter_prodigy_services():
+        config_filename = os.path.join(work_dir, 'config.json')
+        with open(config_filename) as f:
+            service_config = json.load(f)
+            sharing = []
+            for i in service_config.get('share', []):
+                try:
+                    sharing.append({
+                        'to': i['to'],
+                        'id': i['id'],
+                    })
+                except KeyError:
+                    pass
+            try:
+                info = {
+                    'prodigy_id': prodigy_id,
+                    'name': str(service_config['name']),
+                    'db_collection': str(service_config['db_collection']),
+                    'arguments': str(service_config['arguments']),
+                    'sharing': sharing,
+                    'inserted': datetime.now(),
+                    'config': service_config,
+                }
+            except KeyError:
+                app.logger.warning(f'Config file {config_filename} corrupted.')
+                continue
+
+        zip_file_path = zip_prodigy_instance(prodigy_id, work_dir)
+        with open(zip_file_path, 'rb') as f:
+            snapshots_grid_fs.put(f, **info)
+        os.unlink(zip_file_path)
+        archived.append(prodigy_id)
+
+    return f'Archived {len(archived)} instances: {archived}'
+
+
+@app.route('/start/<service_id>', methods=['POST'])
 @roles_required('admin')
 def start_service(service_id):
     true_path = get_work_dir_or_404(service_id)
@@ -443,7 +552,7 @@ def start_service(service_id):
     return redirect(url_for('list_services'), code=302)
 
 
-@app.route('/stop/<service_id>')
+@app.route('/stop/<service_id>', methods=['POST'])
 @roles_required('admin')
 def stop_service(service_id):
     true_path = get_work_dir_or_404(service_id)
@@ -494,7 +603,7 @@ def edit_service(service_id):
     )
 
 
-@app.route('/remove/<service_id>')
+@app.route('/remove/<service_id>', methods=['POST'])
 @roles_required('admin')
 def remove_service(service_id):
     true_path = get_work_dir_or_404(service_id)

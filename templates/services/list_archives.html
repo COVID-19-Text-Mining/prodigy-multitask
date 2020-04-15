@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <title>List of Prodigy Archives</title>
+
+    <!-- Bootstrap core CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+
+    <style>
+        body {
+            margin-top: 50px;
+        }
+
+        th, td {
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <h3>List of Prodigy archives</h3>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <table class="table">
+                <thead>
+                <tr>
+                    <th scope="col">DBID</th>
+                    <th scope="col">Prodigy ID</th>
+                    <th scope="col">Prodigy Arguments</th>
+                    <th scope="col">Inserted Time</th>
+                    <th scope="col" colspan="2">Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for archive in archives %}
+                    <tr>
+                        <td>{{ archive['db_id'] }}</td>
+                        <td>{{ archive['prodigy_id'] }}</td>
+                        <td>{{ archive['arguments'] }}</td>
+                        <td>{{ archive['inserted'] }}</td>
+
+                        <td align="center">
+                            <form action="{{ url_for('delete_archives', db_id=archive['db_id']) }}" method="post">
+                                <button class="btn btn-sm btn-danger delete-archive">
+                                    Delete
+                                </button>
+                            </form>
+                        </td>
+
+                        <td align="center">
+                            <form action="{{ url_for('recover_archives', db_id=archive['db_id']) }}" method="post">
+                                <button class="btn btn-sm btn-primary recover-archive">
+                                    Recover
+                                </button>
+                            </form>
+
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="col-md-12">
+            <p>
+                <a href="{{ url_for('list_services') }}">Go back.</a>
+            </p>
+        </div>
+    </div>
+
+
+</div> <!-- /container -->
+
+<script src="https://code.jquery.com/jquery-3.4.1.min.js"
+        integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.bundle.min.js"
+        integrity="sha384-6khuMg9gaYr5AxOqhkVIODVIvm9ynTT5J4V1cfthmT+emCG6yVmEZsRHdxlotUnm"
+        crossorigin="anonymous"></script>
+<script>
+  $('.delete-archive').click(function (e) {
+    if (!confirm("Are you sure you want to remove this archive?")) {
+      e.preventDefault();
+      return false;
+    }
+  });
+
+  $('.recover-archive').click(function (e) {
+    if (!confirm("If you have a prodigy instance with the same name, it will be overrode. Continue?")) {
+      e.preventDefault();
+      return false;
+    }
+  });
+
+</script>
+</body>
+</html>

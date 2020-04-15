@@ -36,7 +36,7 @@
                 <div class="form-group">
                     <label for="service-name">Service name</label>
                     <input class="form-control" id="service-name" name="name"
-                           {% if name %}value="{{ name }}"{% endif %}>
+                           {% if name %}value="{{ name }}" readonly="readonly" {% endif %}>
                 </div>
                 <div class="form-group">
                     <label for="db-collection-name">Collection to save annotations</label>
@@ -86,31 +86,31 @@
         src="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.4.0/min/dropzone.min.js">
 </script>
 <script>
-    //https://stackoverflow.com/questions/17872417/integrating-dropzone-js-into-existing-html-form-with-other-fields
-    Dropzone.options.myDropzone = {
-        parallelUploads: 5,
-        paramName: 'file',
-        chunking: true,
-        forceChunking: true,
-        url: '{{ url_for("upload",random_id=random_id) }}',
-        maxFilesize: 1025, // megabytes
-        chunkSize: 10485760, // bytes
-        addRemoveLinks: true
-    };
+  //https://stackoverflow.com/questions/17872417/integrating-dropzone-js-into-existing-html-form-with-other-fields
+  Dropzone.options.myDropzone = {
+    parallelUploads: 5,
+    paramName: 'file',
+    chunking: true,
+    forceChunking: true,
+    url: '{{ url_for("upload",random_id=random_id) }}',
+    maxFilesize: 1025, // megabytes
+    chunkSize: 10485760, // bytes
+    addRemoveLinks: true
+  };
 
-    $('#submit-all').click(function (e) {
-        let files = [];
-        $('.dz-filename').each(function () {
-            files.push($(this).find('span').text());
-        });
+  $('#submit-all').click(function (e) {
+    let files = [];
+    $('.dz-filename').each(function () {
+      files.push($(this).find('span').text());
+    });
 
-        $('.additional-files').remove();
-        files.forEach(function (e) {
-            $('#form-service').append(
-                $('<input type="hidden" name="files" value="' + e + '">')
-            )
-        });
-    })
+    $('.additional-files').remove();
+    files.forEach(function (e) {
+      $('#form-service').append(
+        $('<input type="hidden" name="files" value="' + e + '">')
+      )
+    });
+  })
 </script>
 </body>
 </html>

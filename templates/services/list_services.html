@@ -23,7 +23,7 @@
             margin: 0;
         }
 
-        th {
+        th, td {
             text-align: center;
         }
     </style>
@@ -41,7 +41,8 @@
         <div class="col-md-12">
             <p>
                 This website makes it possible to run multiple Prodigy instances on the same website.
-                So we don't need to start a Docker container for each instance.
+                So we don't need to start a Docker container for each instance. All annotations are saved to
+                mongo://mongodb05.nersc.gov/COVID-19-text-mining you specified collection.
             </p>
             <p>
                 Prodigy documentations
@@ -51,8 +52,8 @@
             <table class="table">
                 <thead>
                 <tr>
-                    <th scope="col">Status</th>
-                    <th scope="col">DB Collection</th>
+                    <th scope="col">Status & ID</th>
+                    <th scope="col">MongoDB Collection</th>
                     <th scope="col">Prodigy Arguments</th>
                     <th scope="col">Actions</th>
                     <th scope="col">Console Output</th>
@@ -109,15 +110,17 @@
 
                         <td>
                             {% if service['active'] %}
-                                <a class="btn btn-sm btn-warning"
-                                   href="{{ url_for('stop_service', service_id=service['id']) }}">
-                                    Stop
-                                </a>
+                                <form action="{{ url_for('stop_service', service_id=service['id']) }}" method="post">
+                                    <button class="btn btn-sm btn-warning">
+                                        Stop
+                                    </button>
+                                </form>
                             {% else %}
-                                <a class="btn btn-sm btn-primary"
-                                   href="{{ url_for('start_service', service_id=service['id']) }}">
-                                    Start
-                                </a>
+                                <form action="{{ url_for('start_service', service_id=service['id']) }}" method="post">
+                                    <button class="btn btn-sm btn-primary">
+                                        Start
+                                    </button>
+                                </form>
                             {% endif %}
                         </td>
 
@@ -133,10 +136,12 @@
                         </td>
 
                         <td align="center">
-                            <a class="btn btn-sm btn-danger confirm_removal"
-                               href="{{ url_for('remove_service', service_id=service['id']) }}">
-                                Remove
-                            </a>
+                            <form action="{{ url_for('remove_service', service_id=service['id']) }}" method="post">
+                                <button class="btn btn-sm btn-danger confirm_removal">
+                                    Remove
+                                </button>
+                            </form>
+
                         </td>
                     </tr>
 
@@ -152,11 +157,13 @@
                                         share_id=share['id'], path='') }}"
                                                            target="_blank">Here</a></td>
                                         <td>
-                                            <a class="btn btn-sm btn-danger remove-sharing"
-                                               href="{{ url_for('remove_share',
-                                               service_id=service['id'], share_id=share['id']) }}">
-                                                Remove sharing
-                                            </a>
+                                            <form action="{{ url_for('remove_share',
+                                               service_id=service['id'], share_id=share['id']) }}" method="post">
+                                                <button class="btn btn-sm btn-danger remove-sharing">
+                                                    Remove sharing
+                                                </button>
+                                            </form>
+
                                         </td>
                                     </tr>
                                 {% endfor %}
@@ -185,6 +192,15 @@
                 <a href="{{ url_for('new_service_desc') }}">Click here to start a new Prodigy instance.</a>
             </p>
             <p>
+            <form action="{{ url_for('archive_all_instances') }}" method="post">
+                <button class="save-all" style="border:none;padding:0;color:#007bff;">
+                    Backup
+                </button>
+                all instances to MongoDB.
+                <a href="{{ url_for('list_archives') }}">Recover</a> instances.
+            </form>
+            </p>
+            <p>
                 <a href="{{ url_for_security('logout') }}">Logout</a>
             </p>
         </div>
@@ -199,42 +215,49 @@
         integrity="sha384-6khuMg9gaYr5AxOqhkVIODVIvm9ynTT5J4V1cfthmT+emCG6yVmEZsRHdxlotUnm"
         crossorigin="anonymous"></script>
 <script>
-    $('.confirm_removal').click(function (e) {
-        if (!confirm("Do you really want to remove this Prodigy instance? The database will keep to exist though!")) {
-            e.preventDefault();
-            return false;
-        }
-    });
-
-    $('.confirm-edit').click(function (e) {
-        if (!confirm("This service is running. Editing it will force it to stop first. Continue?")) {
-            e.preventDefault();
-            return false;
-        }
-    });
-
-
-    $('.remove-sharing').click(function (e) {
-        if (!confirm("Are you sure you want to remove this sharing link?")) {
-            e.preventDefault();
-            return false;
-        }
-    });
-
-    if ($('.require-page-reload').length > 0) {
-        setTimeout(function () {
-            location.reload();
-        }, 1000)
+  $('.confirm_removal').click(function (e) {
+    if (!confirm("Do you really want to remove this Prodigy instance? The database will keep to exist though!")) {
+      e.preventDefault();
+      return false;
     }
+  });
 
-    $('.toggle-sharing').click(function () {
-        $(this).closest('tr').next().toggle();
-    });
+  $('.save-all').click(function (e) {
+    if (!confirm("Are you sure? This operation will take some time.")) {
+      e.preventDefault();
+      return false;
+    }
+  });
 
-    const urlParams = new URLSearchParams(window.location.search);
-    urlParams.getAll('viewsharing').forEach(function (v) {
-        $('#service-' + v).next().show();
-    });
+  $('.confirm-edit').click(function (e) {
+    if (!confirm("This service is running. Editing it will force it to stop first. Continue?")) {
+      e.preventDefault();
+      return false;
+    }
+  });
+
+
+  $('.remove-sharing').click(function (e) {
+    if (!confirm("Are you sure you want to remove this sharing link?")) {
+      e.preventDefault();
+      return false;
+    }
+  });
+
+  if ($('.require-page-reload').length > 0) {
+    setTimeout(function () {
+      location.reload();
+    }, 1000)
+  }
+
+  $('.toggle-sharing').click(function () {
+    $(this).closest('tr').next().toggle();
+  });
+
+  const urlParams = new URLSearchParams(window.location.search);
+  urlParams.getAll('viewsharing').forEach(function (v) {
+    $('#service-' + v).next().show();
+  });
 
 </script>
 </body>
