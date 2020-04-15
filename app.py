@@ -467,7 +467,22 @@ def edit_service(service_id):
         os.unlink(os.path.join(true_path, 'prodigy.pid'))
 
     config = read_config_or_404(service_id)
-    files = list(filter(lambda x: x not in prodigy_sys_files, os.listdir(true_path)))
+    files = []
+    folders = []
+    for dirpath, dirnames, filenames in os.walk(true_path):
+        for dirname in dirnames:
+            folders.append(
+                os.path.relpath(
+                    os.path.join(dirpath, dirname),
+                    true_path
+                ))
+        for filename in filenames:
+            fn = os.path.relpath(
+                os.path.join(dirpath, filename),
+                true_path
+            )
+            if fn not in prodigy_sys_files:
+                files.append(fn)
 
     return render_template(
         'services/service_edit_details.html',
@@ -475,7 +490,7 @@ def edit_service(service_id):
         name=str(config['name']),
         db_collection=str(config['db_collection']),
         arguments=str(config['arguments']),
-        files=files
+        files=files + folders,
     )
 
 
@@ -560,11 +575,28 @@ def create_new_service(random_id):
                 return 'UUID mismatch, did you tamper with the request?', 400
 
     # Remove old files
-    for file in os.listdir(new_service_dir):
-        if file in prodigy_sys_files:
-            continue
-        if file not in old_files:
-            os.unlink(os.path.join(new_service_dir, file))
+    old_files_in_fs = []
+    for dirname, dirnames, filenames in os.walk(new_service_dir):
+        old_files_in_fs.extend(map(
+            lambda x: os.path.relpath(os.path.join(dirname, x), new_service_dir),
+            dirnames))
+        old_files_in_fs.extend(map(
+            lambda x: os.path.relpath(os.path.join(dirname, x), new_service_dir),
+            filenames))
+    old_files_in_fs = list(filter(
+        lambda x: x not in prodigy_sys_files and x not in old_files,
+        old_files_in_fs))
+    for file_to_remove in sorted(old_files_in_fs, reverse=True):
+        true_path = os.path.join(new_service_dir, file_to_remove)
+        try:
+            if os.path.isdir(true_path):
+                os.rmdir(true_path)
+            else:
+                os.unlink(true_path)
+        except OSError as e:
+            app.logger.exception(f'Cannot remove {file_to_remove}: {e}')
+            pass
+
     # Copy new files
     for file, src in copy_files.items():
         os.rename(src, os.path.join(new_service_dir, file))
