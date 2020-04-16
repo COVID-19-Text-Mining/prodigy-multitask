@@ -5,3 +5,7 @@ MONGO_PASSWORD = '***'
 MONGO_AUTHENTICATION_DB = '***'
 SECURITY_KEY = '***'
 SECURITY_PASSWORD_SALT = '***'
+EMAIL_SENDER = '***'
+ANNOTATE_INVITATION_SUBJECT = 'Invitation to annotate text on CovidScholar.com'
+ANNOTATE_INVITATION_SUBJECT_BODY = 'I invite you to annotate on CovidScholar.com'
+ANNOTATE_INVITATION_SUBJECT_HTML = None

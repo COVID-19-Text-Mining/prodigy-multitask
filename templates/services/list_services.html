@@ -45,7 +45,7 @@
                 mongo://mongodb05.nersc.gov/COVID-19-text-mining you specified collection.
             </p>
             <p>
-                Prodigy documentations
+                It is strongly recommended to read Prodigy documentations
                 <a href="https://prodi.gy/docs/recipes" target="_blank" rel="noreferrer">here</a>.
             </p>
 
@@ -62,7 +62,7 @@
                 </thead>
                 <tbody>
                 {% for service in all_services %}
-                    <tr class="click-share" id="service-{{ service['id'] }}">
+                    <tr class="click-share" id="service-{{ service['name'] }}">
                         <td align="center">
                             {% if service['active'] %}
                                 {% if service['listening'] %}
@@ -87,7 +87,7 @@
 
                         <td align="center">
                             {% if service['listening'] %}
-                                <a href="{{ url_for('proxy_service', service_id=service['id'], path='') }}"
+                                <a href="{{ url_for('proxy_service', service_id=service['name'], path='') }}"
                                    target="_blank">
                                     Start annotation
                                 </a>
@@ -95,7 +95,7 @@
                             {% elif service['active'] %}
                                 Please wait...
                             {% else %}
-                                <a href="{{ url_for('download_folder', service_id=service['id']) }}"
+                                <a href="{{ url_for('download_folder', service_id=service['name']) }}"
                                    target="_blank">
                                     Download folder
                                 </a>
@@ -103,20 +103,20 @@
                         </td>
 
                         <td align="center">
-                            <a href="{{ url_for('view_console', service_id=service['id']) }}" target="_blank">
+                            <a href="{{ url_for('view_console', service_id=service['name']) }}" target="_blank">
                                 View console
                             </a>
                         </td>
 
                         <td>
                             {% if service['active'] %}
-                                <form action="{{ url_for('stop_service', service_id=service['id']) }}" method="post">
+                                <form action="{{ url_for('stop_service', service_id=service['name']) }}" method="post">
                                     <button class="btn btn-sm btn-warning">
                                         Stop
                                     </button>
                                 </form>
                             {% else %}
-                                <form action="{{ url_for('start_service', service_id=service['id']) }}" method="post">
+                                <form action="{{ url_for('start_service', service_id=service['name']) }}" method="post">
                                     <button class="btn btn-sm btn-primary">
                                         Start
                                     </button>
@@ -126,7 +126,7 @@
 
                         <td align="center">
                             <a class="btn btn-sm btn-info  {% if service['active'] %} confirm-edit {% endif %}"
-                               href="{{ url_for('edit_service', service_id=service['id']) }}">
+                               href="{{ url_for('edit_service', service_id=service['name']) }}">
                                 Edit
                             </a>
                         </td>
@@ -136,7 +136,7 @@
                         </td>
 
                         <td align="center">
-                            <form action="{{ url_for('remove_service', service_id=service['id']) }}" method="post">
+                            <form action="{{ url_for('remove_service', service_id=service['name']) }}" method="post">
                                 <button class="btn btn-sm btn-danger confirm_removal">
                                     Remove
                                 </button>
@@ -149,16 +149,19 @@
                         <td colspan="3"></td>
                         <td colspan="6">
                             <table class="table table-bordered">
-                                {% for share in service['sharing'] %}
+                                {% for share in service['share'] %}
                                     <tr>
-                                        <td>Share with: {{ share['to'] }}</td>
+                                        <td>
+                                            Share with: {{ share['to'] }}
+                                            {% if share['email'] %}&lt;{{ share['email'] }}&gt;{% endif %}
+                                        </td>
                                         <td>Share link: <a href="{{ url_for('share_proxy_service',
-                                        service_id=service['id'],
+                                        service_id=service['name'],
                                         share_id=share['id'], path='') }}"
                                                            target="_blank">Here</a></td>
                                         <td>
                                             <form action="{{ url_for('remove_share',
-                                               service_id=service['id'], share_id=share['id']) }}" method="post">
+                                               service_id=service['name'], share_id=share['id']) }}" method="post">
                                                 <button class="btn btn-sm btn-danger remove-sharing">
                                                     Remove sharing
                                                 </button>
@@ -168,11 +171,14 @@
                                     </tr>
                                 {% endfor %}
                                 <tr>
-                                    <td colspan="3">
+                                    <td colspan="3" style="text-align: left">
                                         <form method="POST"
-                                              action="{{ url_for('add_share', service_id=service['id']) }}">
+                                              action="{{ url_for('add_share', service_id=service['name']) }}">
                                             <label>Add sharing with:</label>
                                             <input name="sharewith" id="sharewith" placeholder="Name">
+                                            <br>
+                                            <label>Send email to:</label>
+                                            <input name="email" id="email" type="email" placeholder="Email (Optional)">
                                             <button type="submit" class="btn btn-sm btn-primary">
                                                 Add sharing
                                             </button>
@@ -193,11 +199,12 @@
             </p>
             <p>
             <form action="{{ url_for('archive_all_instances') }}" method="post">
+                <b>This is for admins:</b>
                 <button class="save-all" style="border:none;padding:0;color:#007bff;">
                     Backup
                 </button>
                 all instances to MongoDB.
-                <a href="{{ url_for('list_archives') }}">Recover</a> instances.
+                <a href="{{ url_for('list_archives') }}">Recover</a> instances from MongoDB.
             </form>
             </p>
             <p>
