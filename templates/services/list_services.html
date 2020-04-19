@@ -149,6 +149,14 @@
                         <td colspan="3"></td>
                         <td colspan="6">
                             <table class="table table-bordered">
+                                <tr>
+                                    <td colspan="3">
+                                        <b>
+                                            Warning: you must start the prodigy instance before users can do
+                                            annotation!
+                                        </b>
+                                    </td>
+                                </tr>
                                 {% for share in service['share'] %}
                                     <tr>
                                         <td>
@@ -200,7 +208,7 @@
             <p>
             <form action="{{ url_for('archive_all_instances') }}" method="post">
                 <b>This is for admins:</b>
-                <button class="save-all" style="border:none;padding:0;color:#007bff;">
+                <button class="save-all" style="border:none;padding:0;color:#007bff;background:none;">
                     Backup
                 </button>
                 all instances to MongoDB.
@@ -222,49 +230,49 @@
         integrity="sha384-6khuMg9gaYr5AxOqhkVIODVIvm9ynTT5J4V1cfthmT+emCG6yVmEZsRHdxlotUnm"
         crossorigin="anonymous"></script>
 <script>
-  $('.confirm_removal').click(function (e) {
-    if (!confirm("Do you really want to remove this Prodigy instance? The database will keep to exist though!")) {
-      e.preventDefault();
-      return false;
+    $('.confirm_removal').click(function (e) {
+        if (!confirm("Do you really want to remove this Prodigy instance? The database will keep to exist though!")) {
+            e.preventDefault();
+            return false;
+        }
+    });
+
+    $('.save-all').click(function (e) {
+        if (!confirm("Are you sure? This operation will take some time.")) {
+            e.preventDefault();
+            return false;
+        }
+    });
+
+    $('.confirm-edit').click(function (e) {
+        if (!confirm("This service is running. Editing it will force it to stop first. Continue?")) {
+            e.preventDefault();
+            return false;
+        }
+    });
+
+
+    $('.remove-sharing').click(function (e) {
+        if (!confirm("Are you sure you want to remove this sharing link?")) {
+            e.preventDefault();
+            return false;
+        }
+    });
+
+    if ($('.require-page-reload').length > 0) {
+        setTimeout(function () {
+            location.reload();
+        }, 1000)
     }
-  });
 
-  $('.save-all').click(function (e) {
-    if (!confirm("Are you sure? This operation will take some time.")) {
-      e.preventDefault();
-      return false;
-    }
-  });
+    $('.toggle-sharing').click(function () {
+        $(this).closest('tr').next().toggle();
+    });
 
-  $('.confirm-edit').click(function (e) {
-    if (!confirm("This service is running. Editing it will force it to stop first. Continue?")) {
-      e.preventDefault();
-      return false;
-    }
-  });
-
-
-  $('.remove-sharing').click(function (e) {
-    if (!confirm("Are you sure you want to remove this sharing link?")) {
-      e.preventDefault();
-      return false;
-    }
-  });
-
-  if ($('.require-page-reload').length > 0) {
-    setTimeout(function () {
-      location.reload();
-    }, 1000)
-  }
-
-  $('.toggle-sharing').click(function () {
-    $(this).closest('tr').next().toggle();
-  });
-
-  const urlParams = new URLSearchParams(window.location.search);
-  urlParams.getAll('viewsharing').forEach(function (v) {
-    $('#service-' + v).next().show();
-  });
+    const urlParams = new URLSearchParams(window.location.search);
+    urlParams.getAll('viewsharing').forEach(function (v) {
+        $('#service-' + v).next().show();
+    });
 
 </script>
 </body>

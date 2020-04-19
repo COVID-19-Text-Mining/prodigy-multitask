@@ -10,7 +10,6 @@ from flask import (
     Flask, render_template, make_response, request,
     redirect, url_for, abort, Response, send_file)
 from flask_login import current_user
-from flask_mail import Mail, Message
 from flask_mongoengine import MongoEngine
 from flask_security import MongoEngineUserDatastore, Security, UserMixin, RoleMixin, roles_required, url_for_security
 from gridfs import GridFS
@@ -32,8 +31,9 @@ app.config['SECRET_KEY'] = settings.SECURITY_KEY
 app.config['SECURITY_PASSWORD_SALT'] = settings.SECURITY_PASSWORD_SALT
 app.config['SECURITY_UNAUTHORIZED_VIEW'] = 'unauthorized'
 
-mail = Mail(app)
 db = MongoEngine(app)
+mail_session = requests.Session()
+mail_session.auth = ('api', settings.MAILGUN_API_KEY)
 
 
 def get_archive_col():
@@ -111,23 +111,44 @@ def list_services():
 def add_share(service_id):
     service_config = read_config_or_404(service_id)
 
-    email = request.form.get('email', '')
+    to = str(request.form.get('sharewith')).strip()
+    share_id = str(uuid.uuid1()).strip()
+    email = request.form.get('email', '').strip()
     service_config['share'].append({
-        'to': str(request.form.get('sharewith')),
-        'id': str(uuid.uuid1()),
+        'to': to,
+        'id': share_id,
         'email': email,
     })
 
     # Send mail
-    msg = Message(
-        settings.ANNOTATE_INVITATION_SUBJECT,
-        sender=settings.EMAIL_SENDER,
-        recipients=[email],
-        body=settings.ANNOTATE_INVITATION_SUBJECT_BODY,
-        html=settings.ANNOTATE_INVITATION_SUBJECT_HTML)
-    mail.send(msg)
+    if email:
+        message_api = settings.MAILGUN_API_ENDPOINT
+        if message_api.endswith('/'):
+            message_api = message_api.rstrip('/')
+        message_api += '/messages'
 
-    write_config_or_404(service_id, service_config)
+        email_data = {
+            'from': settings.EMAIL_SENDER,
+            'to': email,
+            'subject': settings.ANNOTATE_INVITATION_SUBJECT,
+        }
+        formatter = {
+            'name': to,
+            'link': url_for(
+                'share_proxy_service',
+                service_id=service_id, share_id=share_id, path='/',
+                _external=True)}
+        if settings.ANNOTATE_INVITATION_SUBJECT_HTML:
+            email_data['html'] = settings.ANNOTATE_INVITATION_SUBJECT_HTML.format(**formatter)
+        else:
+            email_data['text'] = settings.ANNOTATE_INVITATION_SUBJECT_BODY.format(**formatter)
+
+        mail_req = mail_session.post(
+            message_api, data=email_data)
+        app.logger.info(f'Send email to {email} receives response '
+                        f'code {mail_req.status_code}, response body {mail_req.content}')
+
+        write_config_or_404(service_id, service_config)
 
     return redirect(url_for('list_services', viewsharing=service_id), code=302)
 
