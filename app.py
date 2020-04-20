@@ -148,7 +148,7 @@ def add_share(service_id):
         app.logger.info(f'Send email to {email} receives response '
                         f'code {mail_req.status_code}, response body {mail_req.content}')
 
-        write_config_or_404(service_id, service_config)
+    write_config_or_404(service_id, service_config)
 
     return redirect(url_for('list_services', viewsharing=service_id), code=302)
 
