@@ -2,9 +2,12 @@ FROM tiangolo/uwsgi-nginx-flask:python3.6-alpine3.7
 COPY ./ /app
 
 RUN apk update
-RUN apk add libstdc++ libgcc libffi-dev
+RUN apk add libstdc++ libgcc libffi openblas
 # When building wheels, add this
-# RUN apk add --no-cache --virtual .build-deps make automake gcc g++ python3-dev linux-headers
+# RUN apk add --no-cache --virtual .build-deps \
+#    make automake gcc g++ python3-dev linux-headers \
+#    openblas-dev libffi-dev
+RUN pip install --upgrade pip
 RUN pip install cython
 RUN pip install \
     /app/wheels/bcrypt-3.1.7-cp36-cp36m-linux_x86_64.whl\
@@ -26,7 +29,17 @@ RUN pip install \
     /app/wheels/toolz-0.10.0-cp36-none-any.whl\
     /app/wheels/uvloop-0.14.0-cp36-cp36m-linux_x86_64.whl\
     /app/wheels/websockets-8.1-cp36-cp36m-linux_x86_64.whl\
-    /app/prodigy-1.9.9-cp36.cp37.cp38-cp36m.cp37m.cp38-linux_x86_64.whl
+    /app/prodigy-1.9.9-cp36.cp37.cp38-cp36m.cp37m.cp38-linux_x86_64.whl\
+    /app/additional_wheels/editdistance-0.5.3-cp36-cp36m-linux_x86_64.whl\
+    /app/additional_wheels/mrakun-0.38-py3-none-any.whl\
+    /app/additional_wheels/nltk-3.5-py3-none-any.whl\
+    /app/additional_wheels/pandas-1.0.3-cp36-cp36m-linux_x86_64.whl\
+    /app/additional_wheels/py3plex-0.72-py3-none-any.whl\
+    /app/additional_wheels/regex-2020.4.4-cp36-cp36m-linux_x86_64.whl\
+    /app/additional_wheels/scipy-1.3.3-cp36-cp36m-linux_x86_64.whl
+
+# For some reason, apline 3.7 can only support scipy 1.3.3
+# RUN pip install scipy==1.3.3
 RUN pip install -r /app/requirements.txt
 
 # Cleanup
@@ -34,6 +47,7 @@ RUN pip install -r /app/requirements.txt
 RUN rm -rf /root/.cache/pip \
     /app/prodigy-1.9.9-cp36.cp37.cp38-cp36m.cp37m.cp38-linux_x86_64.whl \
     /app/wheels
+    /app/additional_wheels
 
 RUN python -m spacy download en_core_web_sm
 
