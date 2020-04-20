@@ -46,7 +46,7 @@ RUN pip install -r /app/requirements.txt
 # RUN apk del .build-deps
 RUN rm -rf /root/.cache/pip \
     /app/prodigy-1.9.9-cp36.cp37.cp38-cp36m.cp37m.cp38-linux_x86_64.whl \
-    /app/wheels
+    /app/wheels\
     /app/additional_wheels
 
 RUN python -m spacy download en_core_web_sm
