@@ -39,12 +39,10 @@ print('Prodigy entry point loaded')
 
 
 import json
-import uuid
 import time
 import pymongo
 import settings
 
-from datetime import datetime
 from prodigy.components.db import Database
 from prodigy.util import TASK_HASH_ATTR, INPUT_HASH_ATTR
 
@@ -86,6 +84,10 @@ class MongoDatabase(Database):
     @property
     def db(self):
         return None
+
+    @staticmethod
+    def get_mongo_db():
+        return db
 
     def __len__(self):
         """
