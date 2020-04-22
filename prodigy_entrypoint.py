@@ -6,6 +6,7 @@ import sys
 assert len(sys.argv) == 2
 work_dir = os.path.realpath(sys.argv[1])
 assert os.path.exists(work_dir) and os.path.isdir(work_dir)
+sys.path.append(work_dir)
 
 # Close all file descriptors since we might come from fork
 os.closerange(0, 4096)
