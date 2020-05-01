@@ -33,7 +33,7 @@ MONGO_USERNAME = '' or os.environ['MONGO_USERNAME']
 MONGO_PASSWORD = '' or os.environ['MONGO_PASSWORD']
 MONGO_AUTHENTICATION_DB = '' or os.environ['MONGO_AUTHENTICATION_DB']
 
-MAILGUN_API_ENDPOINT = 'https://api.mailgun.net/v3/DOMAIN'
+MAILGUN_API_ENDPOINT = '' or os.environ['MAILGUN_API_ENDPOINT']
 MAILGUN_API_KEY = '' or os.environ['MAILGUN_API_KEY']
 
 SECURITY_KEY = '' or os.environ['SECURITY_KEY'] # Some random strings

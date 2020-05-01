@@ -1,4 +1,5 @@
 .git
+.idea/
 __pycache__/
 prodigy_dir/
 temp_file_storage/
