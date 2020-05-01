@@ -1,4 +1,5 @@
 FROM tiangolo/uwsgi-nginx-flask:python3.6-alpine3.7
+MAINTAINER Haoyan Huo <haoyan.huo@lbl.gov>
 COPY ./ /app
 
 RUN apk update
