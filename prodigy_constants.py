@@ -10,8 +10,8 @@ __all__ = [
     'PRODIGY_SYS_FILES'
 ]
 
-PRODIGY_INSTANCES_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'prodigy_dir')
-TEMP_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'temp_file_storage')
+PRODIGY_INSTANCES_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'run', 'prodigy_dir')
+TEMP_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'run', 'temp_file_storage')
 
 if not os.path.exists(PRODIGY_INSTANCES_DIR):
     os.mkdir(PRODIGY_INSTANCES_DIR)
