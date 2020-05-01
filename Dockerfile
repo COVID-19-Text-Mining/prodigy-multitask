@@ -56,7 +56,7 @@ RUN python -m spacy download en_core_web_sm
 # Make /var/cache/nginx/ writable by non-root users
 RUN mkdir /app/run
 RUN mkdir /app/run/prodigy_dir /app/run/temp_file_storage
-RUN chgrp nginx /var/cache/nginx/ /app/prodigy_dir /app/temp_file_storage
-RUN chmod g+w /var/cache/nginx/ /app/prodigy_dir /app/temp_file_storage
+RUN chgrp nginx /var/cache/nginx/ /app/run/prodigy_dir /app/run/temp_file_storage
+RUN chmod g+w /var/cache/nginx/ /app/run/prodigy_dir /app/run/temp_file_storage
 # Open port 8080 as non-root user
 ENV LISTEN_PORT=8080
