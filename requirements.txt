@@ -1,6 +1,6 @@
 bcrypt==3.1.7
 email_validator
-flask==1.1.2
+flask==2.3.2
 Flask-PyMongo==2.3.0
 Flask-Security==3.0.0
 Flask-MongoEngine==0.9.5
